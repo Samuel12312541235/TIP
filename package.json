@@ -1,0 +1,68 @@
+{
+  "name": "dayflow",
+  "productName": "Dayflow",
+  "version": "1.0.0",
+  "description": "日序 · 本地优先的个人日程中枢",
+  "main": "main.js",
+  "private": true,
+  "author": "Samuel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Samuel12312541235/TIP.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.dayflow.desktop",
+    "productName": "Dayflow",
+    "executableName": "Dayflow",
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "renderer/**/*",
+      "server/**/*",
+      "agent/**/*",
+      "assets/**/*",
+      "scripts/listen.ps1",
+      "README.md",
+      "LICENSE"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts/listen.ps1",
+        "to": "scripts/listen.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "Dayflow-${version}-portable.exe",
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "Dayflow-${version}-portable.exe",
+      "requestExecutionLevel": "user"
+    }
+  }
+}

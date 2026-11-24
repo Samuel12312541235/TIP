@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+    <title>日程登记</title>
+    <link rel="stylesheet" href="styles/add.css" />
+  </head>
+  <body>
+    <div class="assistant" id="app">
+      <header class="top">
+        <div class="brand">
+          <span class="mark" id="brand"></span>
+          <span class="bt">日序<em>日程登记</em></span>
+        </div>
+        <div class="steps" id="steps">
+          <div class="step" data-i="0"><i></i><b>事项</b></div>
+          <div class="step" data-i="1"><i></i><b>时间</b></div>
+          <div class="step" data-i="2"><i></i><b>类别</b></div>
+          <div class="step" data-i="3"><i></i><b>确认</b></div>
+        </div>
+        <button class="x" id="btnClose" title="关闭（Esc）">
+          <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" /></svg>
+        </button>
+      </header>
+
+      <section class="hero" id="hero">
+        <h1>您好，今天需要安排什么？</h1>
+        <p>请口述或输入事项，我来整理日期、时间与类别。</p>
+        <div class="examples" id="examples"></div>
+      </section>
+
+      <main class="thread" id="thread" aria-live="polite"></main>
+
+      <section class="form-pane" id="formPane">
+        <div class="form-head">
+          <div><h2>表单登记</h2><p>按传统方式填写；保存后仍可继续登记。</p></div>
+          <button class="form-back" id="btnFormBack" type="button">返回对话</button>
+        </div>
+        <form class="item-form" id="itemForm" autocomplete="off" novalidate>
+          <label class="f-field"><span>事项</span><input id="fTitle" type="text" maxlength="120" placeholder="请输入事项名称" /></label>
+          <div class="f-row">
+            <label class="f-field"><span>日期</span><input id="fDate" type="date" /></label>
+            <label class="f-field"><span>时间</span><input id="fTime" type="time" /></label>
+          </div>
+          <div class="f-row">
+            <label class="f-field"><span>类别</span><select id="fDomain"></select></label>
+            <label class="f-field"><span>优先级</span><select id="fPriority"><option value="2">普通</option><option value="3">重点</option></select></label>
+          </div>
+          <label class="f-field"><span>备注</span><textarea id="fNotes" rows="3" placeholder="可选"></textarea></label>
+          <div class="f-actions">
+            <button class="btn primary" type="submit" id="fSave">保存登记</button>
+            <button class="btn ghost" type="button" id="fReset">清空</button>
+            <span class="f-status" id="fStatus"></span>
+          </div>
+        </form>
+      </section>
+
+      <footer class="dock">
+        <div class="answers" id="answers"></div>
+        <div class="field" id="field">
+          <textarea id="input" rows="1" placeholder="例如：明天下午三点提交月工作总结" spellcheck="false"></textarea>
+          <button class="mic" id="btnMic" title="语音输入" aria-label="语音输入">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>
+          </button>
+          <button class="send" id="btnSend" aria-label="提交">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 3.8L3.8 10.4l6.2 2.6 2.6 6.2 7.9-15.4Z" /><path d="M10 13l4.6-4.6" /></svg>
+          </button>
+        </div>
+        <div class="hint-row">
+          <div class="hint"><kbd>Enter</kbd> 提交 · <kbd>Esc</kbd> 关闭</div>
+          <button class="form-link" id="btnForm" type="button">用表单填写</button>
+        </div>
+      </footer>
+    </div>
+    <script src="js/voice.js"></script>
+    <script src="js/add.js"></script>
+  </body>
+</html>

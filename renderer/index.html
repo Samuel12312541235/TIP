@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://127.0.0.1:*;" />
+    <title>日序 Dayflow</title>
+    <link rel="stylesheet" href="styles/app.css" />
+    <link rel="stylesheet" href="styles/views.css" />
+  </head>
+  <body data-motion="full" data-quality="high">
+    <div class="app">
+      <header class="titlebar" id="titlebar">
+        <div class="brand">
+          <span class="brand-mark" id="brandMark"></span>
+          <span class="brand-name">日序</span>
+          <span class="brand-en">DAYFLOW</span>
+        </div>
+        <div class="tb-drag"></div>
+        <div class="tb-right">
+          <button class="tb-btn" id="btnModules" title="切换模块（Ctrl Shift M）">
+            <span id="modulesIcon"></span>
+            <span>模块</span>
+          </button>
+          <button class="tb-btn" id="btnPalette" title="搜索与命令（Ctrl K）">
+            <span id="paletteIcon"></span>
+            <span>搜索</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button class="tb-btn" id="btnFormAdd" title="表单登记">
+            <span id="formIcon"></span>
+            <span>表单</span>
+          </button>
+          <button class="btn-primary" id="btnNew" title="新建事项（N）">
+            <span id="newIcon"></span><span>新建</span>
+          </button>
+          <div class="win-controls">
+            <button class="win-btn" id="winMin" title="最小化"><svg viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.1" /></svg></button>
+            <button class="win-btn" id="winMax" title="最大化"><svg viewBox="0 0 12 12"><rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1" fill="none" stroke="currentColor" stroke-width="1.1" /></svg></button>
+            <button class="win-btn close" id="winClose" title="关闭"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.15" /></svg></button>
+          </div>
+        </div>
+      </header>
+
+      <div class="shell">
+        <aside class="sidebar" id="sidebar">
+          <div class="nav-wrap">
+            <span class="nav-indicator" id="navInd"></span>
+            <nav class="nav" id="nav"></nav>
+          </div>
+          <div class="side-card" id="sideCard"></div>
+          <div class="side-foot">
+            <button class="agent-pill" id="agentPill">
+              <span class="pulse"></span>
+              <span>Agent · <b id="agentPort">7788</b></span>
+            </button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="view" id="view"></div>
+        </main>
+      </div>
+    </div>
+
+    <div class="drawer-wrap" id="drawerWrap" hidden></div>
+    <div class="palette-wrap" id="paletteWrap" hidden></div>
+    <div class="modules-wrap" id="modules" hidden></div>
+    <div class="toasts" id="toasts"></div>
+    <div class="perf-hud" id="perfHud" hidden></div>
+
+    <script src="js/core.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/voice.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

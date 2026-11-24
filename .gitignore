@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# local data (never commit schedules, tokens or personal seed)
+data/
+agent/connection.json
+
+# build output
+release/
+dist/
+out/
+
+# personal screenshots and logs
+shots/
+boot.log
+*.log
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# local test artifacts
+*.lnk
+*.tmp
