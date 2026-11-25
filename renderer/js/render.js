@@ -222,18 +222,18 @@
       <div class="split">
         <section class="agenda rise" style="--i:2">
           <div class="agenda-head">
-            <div class="agenda-title">今日重点 <span>${pool.length} 项待办${pool.filter((i) => i.date < today).length ? ` · ${pool.filter((i) => i.date < today).length} 逾期` : ''}</span></div>
+            <div class="agenda-title" data-drop-priority="3">今日重点 <span>${pool.length} 项待办${pool.filter((i) => i.date < today).length ? ` · ${pool.filter((i) => i.date < today).length} 逾期` : ''}</span></div>
             <button class="link-btn" data-act="add" data-date="${today}">${icon('plus')} 添加</button>
           </div>
           <div class="agenda-body">
             <div class="filter-row">
               <button class="filter-chip ${filter === 'all' ? 'on' : ''}" data-act="filter" data-domain="all">全部</button>
-              ${s.domains.map((d) => `<button class="filter-chip ${filter === d.id ? 'on' : ''}" data-act="filter" data-domain="${d.id}"><span class="cdot" style="--c:${d.color}"></span>${esc(d.name)}</button>`).join('')}
+              ${s.domains.map((d) => `<button class="filter-chip ${filter === d.id ? 'on' : ''}" data-act="filter" data-domain="${d.id}" data-drop-domain="${d.id}"><span class="cdot" style="--c:${d.color}"></span>${esc(d.name)}</button>`).join('')}
             </div>
             ${focus.length ? `<div class="stack">${focus.map((i) => focusRow(i, ctx)).join('')}</div>` : `<div class="empty">${icon('check')}<div>今日暂无待办事项</div></div>`}
             ${
               rest.length
-                ? `<div class="sub-label">其他安排 <span>${restAll.length}</span></div><div class="more-list">${rest.map((i) => R.itemRow(i, ctx)).join('')}</div>`
+                ? `<div class="sub-label" data-drop-priority="2">其他安排 <span>${restAll.length}</span></div><div class="more-list">${rest.map((i) => R.itemRow(i, ctx)).join('')}</div>`
                 : ''
             }
             ${restMore > 0 ? `<button class="more-link" data-act="nav" data-view="planner">另有 ${restMore} 项 · 查看全部排期 ${icon('chevronRight')}</button>` : ''}

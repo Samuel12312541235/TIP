@@ -90,6 +90,13 @@ class Store extends EventEmitter {
       this.state.settings.api.token = rid('df').replace('_', '');
       this.saveNow();
     }
+    const itemIds = new Set(this.state.items.map((i) => i.id));
+    const trackIds = new Set((this.state.tracks || []).map((t) => t.id));
+    const courseIds = new Set((this.state.courses || []).map((c) => c.id));
+    const cleanOrder = (arr, ids) => (Array.isArray(arr) ? arr.filter((id, i, all) => ids.has(id) && all.indexOf(id) === i) : []);
+    this.state.settings.itemOrder = cleanOrder(this.state.settings.itemOrder, itemIds);
+    this.state.settings.trackOrder = cleanOrder(this.state.settings.trackOrder, trackIds);
+    this.state.settings.courseOrder = cleanOrder(this.state.settings.courseOrder, courseIds);
     return this.state;
   }
 
@@ -227,6 +234,9 @@ class Store extends EventEmitter {
     const idx = this.state.items.findIndex((x) => x.id === id);
     if (idx < 0) return false;
     const [removed] = this.state.items.splice(idx, 1);
+    if (Array.isArray(this.state.settings.itemOrder)) {
+      this.state.settings.itemOrder = this.state.settings.itemOrder.filter((x) => x !== id);
+    }
     this.log({ actor, action: 'delete', detail: removed.title });
     this.changed('delete', actor);
     return true;
@@ -288,6 +298,9 @@ class Store extends EventEmitter {
     const idx = this.state.tracks.findIndex((x) => x.id === id);
     if (idx < 0) return null;
     const [removed] = this.state.tracks.splice(idx, 1);
+    if (Array.isArray(this.state.settings.trackOrder)) {
+      this.state.settings.trackOrder = this.state.settings.trackOrder.filter((x) => x !== id);
+    }
     let unlinked = 0;
     this.state.items.forEach((i) => {
       if (i.trackId === id) {
@@ -316,6 +329,9 @@ class Store extends EventEmitter {
     const idx = (this.state.courses || []).findIndex((x) => x.id === id);
     if (idx < 0) return null;
     const [removed] = this.state.courses.splice(idx, 1);
+    if (Array.isArray(this.state.settings.courseOrder)) {
+      this.state.settings.courseOrder = this.state.settings.courseOrder.filter((x) => x !== id);
+    }
     let unlinked = 0;
     this.state.items.forEach((i) => {
       if (i.course === id) {

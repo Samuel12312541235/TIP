@@ -44,6 +44,13 @@
     savedScroll: 0,
   };
 
+  let settingsChain = Promise.resolve();
+  function saveSettings(patch) {
+    const run = settingsChain.then(() => window.dayflow.updateSettings(patch));
+    settingsChain = run.catch(() => {});
+    return run;
+  }
+
   /* ── 数据 ─────────────────────────────────────────────── */
   function setPayload(p) {
     App.payload = p;
@@ -616,15 +623,31 @@
     setTimeout(() => host.remove(), opts.big ? 1500 : 1000);
   }
 
+  function completionPraise({ n, key, combo, left, overdue }) {
+    const pick = (arr, seed) => arr[Math.abs(seed) % arr.length];
+    if (left === 0 && overdue === 0) return '最后一项完成，今天稳稳收住了 🌙 辛苦啦';
+    if (key) {
+      return pick(['重点事项拿下，辛苦啦 🌹', '最难的那件先落地，今天很稳 👏', '重点清掉一项，给自己一点掌声 ✨'], n + left);
+    }
+    if (left === 1) return '只剩最后一项了，收个漂亮的尾吧 ✨';
+    if (n === 1) return '第一项完成！好状态从这一小步开始 🌱';
+    if (combo >= 3) return `连续完成 ${combo} 项，节奏真稳，辛苦啦 👏`;
+    if (n % 5 === 0) return `第 ${n} 项完成，专注了这么久，给自己一点掌声 👏`;
+    return pick(
+      ['恭喜又完成一项，辛苦啦 🌹', '这一项也收好了，给自己一点掌声 👏', '又清掉一件，今天在向前走 🌿', '完成一项，先喝口水吧 ☕'],
+      n + left
+    );
+  }
+
   function showAllDone() {
     if (window.DF.reduced()) {
-      toast('今日事项已全部完成，辛苦了。', { icon: 'spark' });
+      toast('今日事项全部完成，辛苦啦 🌙 给自己一点休息时间。', { icon: 'spark' });
       return;
     }
     const host = el(`<div class="all-done"><div class="ad-card">
       <span class="ad-check">${icon('check')}</span>
-      <b>今日事项已完成</b>
-      <em>辛苦了，明天见。</em>
+      <b>今天稳稳收住了</b>
+      <em>辛苦啦，给自己一点休息时间 🌙</em>
     </div></div>`);
     document.body.appendChild(host);
     celebrateAt(window.innerWidth / 2, window.innerHeight * 0.46, { big: true });
@@ -656,6 +679,17 @@
       }
     }
     const item = App.state.items.find((i) => i.id === id);
+    const today = App.payload.today.today;
+    const n = App.state.items.filter((i) => i.status === 'done' && (i.completedAt || '').slice(0, 10) === today).length + 1;
+    const todayLeft = App.state.items.filter((i) => i.status !== 'done' && i.status !== 'dropped' && i.date === today && i.id !== id).length;
+    const overdueLeft = App.state.items.filter((i) => i.status !== 'done' && i.status !== 'dropped' && i.date < today).length;
+    try {
+      await window.dayflow.setStatus(id, wasDone ? 'todo' : 'done');
+    } catch (err) {
+      paint({ animate: false });
+      toast('这次没有保存成功，先别急，再试一次。');
+      return;
+    }
     if (!wasDone) {
       const check = row ? row.querySelector('.check') : null;
       const r = (check || row || {}).getBoundingClientRect ? (check || row).getBoundingClientRect() : null;
@@ -673,29 +707,21 @@
           { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' }
         );
       }
-      const today = App.payload.today.today;
-      const n = App.state.items.filter((i) => i.status === 'done' && (i.completedAt || '').slice(0, 10) === today).length + 1;
       const now = Date.now();
       if (App.ui.lastDoneAt && now - App.ui.lastDoneAt < 15000) App.ui.doneCombo = (App.ui.doneCombo || 1) + 1;
       else App.ui.doneCombo = 1;
       App.ui.lastDoneAt = now;
-      let msg = `已完成今日第 ${n} 项。`;
-      if (item && item.priority === 3) msg = `重点事项已完成，今日第 ${n} 项。`;
-      else if (n === 1) msg = '已完成今日第 1 项，开局顺利。';
-      else if (n % 3 === 0) msg = `已完成今日第 ${n} 项，进度良好。`;
-      else if (n % 5 === 0) msg = `已完成今日第 ${n} 项，节奏保持得不错。`;
-      if (App.ui.doneCombo >= 2) msg += ` 连续完成 ${App.ui.doneCombo} 项。`;
-      toast(msg, { icon: 'check' });
-      const todayLeft = App.state.items.filter((i) => i.status !== 'done' && i.status !== 'dropped' && i.date === today && i.id !== id).length;
-      const overdueLeft = App.state.items.filter((i) => i.status !== 'done' && i.status !== 'dropped' && i.date < today).length;
+      const msg = completionPraise({
+        n,
+        key: !!(item && item.priority === 3),
+        combo: App.ui.doneCombo,
+        left: todayLeft,
+        overdue: overdueLeft,
+      });
+      toast(msg, { icon: item && item.priority === 3 ? 'star' : 'spark' });
       if (item && item.date === today && todayLeft === 0 && overdueLeft === 0) {
         setTimeout(() => showAllDone(), 620);
       }
-    }
-    try {
-      await window.dayflow.setStatus(id, wasDone ? 'todo' : 'done');
-    } catch (err) {
-      toast('更新未成功，请重试。');
     }
   }
 
@@ -817,7 +843,7 @@
       toast('没有保存成功，请重试。');
       return;
     }
-    toast(next === 3 ? '已标为重点' : '已取消重点', { icon: 'star' });
+    toast(next === 3 ? '已标为重点，先照顾它 🌟' : '已放回普通节奏，慢慢来', { icon: 'star' });
     setTimeout(() => {
       if (btn) setTimeout(() => btn.classList.remove('pop'), 380);
       const card = qs(`.item[data-id="${id}"], .task-card[data-id="${id}"]`);
@@ -899,8 +925,77 @@
     }, 220);
   }
 
-  function reorderItemCards(source, target) {
-    if (!source || !target || source.parentElement !== target.parentElement) return false;
+  let classDock = null;
+
+  function ensureClassDock() {
+    if (classDock && document.body.contains(classDock)) return classDock;
+    classDock = el('<div class="class-dock" id="classDock" hidden></div>');
+    document.body.appendChild(classDock);
+    return classDock;
+  }
+
+  function refreshClassDock() {
+    const domains = (App.state && App.state.domains) || [];
+    const dock = ensureClassDock();
+    dock.innerHTML = `<span class="cd-hint">${icon('grip')} 拖动归类</span>
+      <div class="cd-group">
+        <button type="button" class="cd-chip pri key" data-drop-priority="3">${icon('star')}重点</button>
+        <button type="button" class="cd-chip pri" data-drop-priority="2">普通</button>
+        <button type="button" class="cd-chip pri" data-drop-priority="1">轻</button>
+      </div>
+      <span class="cd-sep"></span>
+      <div class="cd-group">${domains
+        .map((d) => `<button type="button" class="cd-chip domain" data-drop-domain="${d.id}"><span class="cdot" style="--c:${d.color}"></span>${esc(d.name)}</button>`)
+        .join('')}</div>`;
+    return dock;
+  }
+
+  function showClassDock() {
+    const dock = refreshClassDock();
+    dock.hidden = false;
+    requestAnimationFrame(() => dock.classList.add('show'));
+  }
+
+  function hideClassDock() {
+    if (!classDock) return;
+    classDock.classList.remove('show');
+    setTimeout(() => {
+      if (classDock && !classDock.classList.contains('show')) classDock.hidden = true;
+    }, 180);
+  }
+
+  async function classifyItem(item, kind, value) {
+    if (!item) return false;
+    const patch = kind === 'priority' ? { priority: Number(value) } : { domain: value };
+    const prev = kind === 'priority' ? { priority: item.priority } : { domain: item.domain };
+    let saved = null;
+    try {
+      saved = await window.dayflow.saveItem(Object.assign({}, item, patch));
+    } catch (_) {}
+    if (!saved) {
+      toast('归类没有保存成功，请重试。');
+      return false;
+    }
+    let label = '';
+    if (kind === 'priority') {
+      const p = Number(value);
+      label = p === 3 ? '已标为重点，先照顾它 🌟' : p === 1 ? '已设为轻量，按自己的节奏来' : '已放回普通节奏，稳稳推进';
+    } else {
+      const d = App.domainMap[value];
+      label = `已归到「${d ? d.name : value}」分区`;
+    }
+    toastAction(label, '撤销', async () => {
+      try {
+        await window.dayflow.saveItem(Object.assign({}, item, prev));
+        toast('已恢复');
+      } catch (_) {
+        toast('恢复失败，请重试。');
+      }
+    });
+    return true;
+  }
+
+  function reorderItemCards(source, target) {    if (!source || !target || source.parentElement !== target.parentElement) return false;
     const container = source.parentElement;
     const before = new Map();
     [...container.children].forEach((el) => before.set(el, el.getBoundingClientRect()));
@@ -920,11 +1015,14 @@
     const visible = [...container.querySelectorAll(':scope > .item, :scope > .task-card')].map((el) => el.dataset.id).filter(Boolean);
     const prev = (App.state.settings.itemOrder || []).slice();
     const next = [...visible, ...prev.filter((id) => !visible.includes(id))];
-    window.dayflow.updateSettings({ itemOrder: next });
-    toastAction('顺序已更新', '撤销', async () => {
-      await window.dayflow.updateSettings({ itemOrder: prev });
-      toast('已恢复排序');
-    });
+    saveSettings({ itemOrder: next })
+      .then(() => {
+        toastAction('顺序已更新', '撤销', async () => {
+          await saveSettings({ itemOrder: prev });
+          toast('已恢复排序');
+        });
+      })
+      .catch(() => toast('排序保存失败，请重试。'));
     return true;
   }
 
@@ -945,17 +1043,15 @@
     );
 
     function clearTarget() {
-      if (!state || !state.target) {
-        if (state) {
-          state.reorderTarget = null;
-          state.dropDate = '';
-        }
-        return;
+      if (state && state.target) state.target.classList.remove('drop-over', 'over', 'reorder-over', 'class-over');
+      if (state) {
+        state.target = null;
+        state.reorderTarget = null;
+        state.classTarget = null;
+        state.classKind = '';
+        state.classValue = '';
+        state.dropDate = '';
       }
-      state.target.classList.remove('drop-over', 'over', 'reorder-over');
-      state.target = null;
-      state.reorderTarget = null;
-      state.dropDate = '';
     }
 
     function sourceCard(handle) {
@@ -968,6 +1064,7 @@
       clearTarget();
       if (state.card) state.card.classList.remove('drag-source');
       document.body.classList.remove('is-dragging');
+      hideClassDock();
       hideDragRail();
       window.removeEventListener('keydown', onKey, true);
       state = null;
@@ -1015,6 +1112,9 @@
         ghost: null,
         target: null,
         reorderTarget: null,
+        classTarget: null,
+        classKind: '',
+        classValue: '',
         dropDate: '',
         raf: 0,
         pointerId: e.pointerId,
@@ -1050,6 +1150,7 @@
       state.ghost = g;
       state.card.classList.add('drag-source');
       document.body.classList.add('is-dragging');
+      if (state.card.matches('.item, .task-card, .pchip, .cal-ev')) showClassDock();
     }
 
     function paintGhost() {
@@ -1068,14 +1169,21 @@
         cardUnder !== state.card &&
         cardUnder.parentElement === state.card.parentElement
       );
+      const classEl = under && under.closest('[data-drop-priority], [data-drop-domain]');
+      const canClass = !!(classEl && state.card.matches('.item, .task-card, .pchip, .cal-ev'));
       const dateTarget = under && under.closest('[data-drop-date]');
-      const target = canReorder ? cardUnder : dateTarget;
+      const target = canClass ? classEl : canReorder ? cardUnder : dateTarget;
       if (target !== state.target) {
         clearTarget();
         state.target = target;
-        state.reorderTarget = canReorder ? cardUnder : null;
+        state.reorderTarget = canReorder && !canClass ? cardUnder : null;
         if (target) {
-          if (canReorder) {
+          if (canClass) {
+            state.classTarget = classEl;
+            state.classKind = classEl.hasAttribute('data-drop-priority') ? 'priority' : 'domain';
+            state.classValue = classEl.getAttribute(state.classKind === 'priority' ? 'data-drop-priority' : 'data-drop-domain') || '';
+            target.classList.add('class-over');
+          } else if (canReorder) {
             target.classList.add('reorder-over');
           } else {
             state.dropDate = target.dataset.dropDate || '';
@@ -1112,12 +1220,16 @@
       window.removeEventListener('keydown', onKey, true);
       if (s.raf) cancelAnimationFrame(s.raf);
       const reorderTarget = s.reorderTarget;
+      const classTarget = s.classTarget;
+      const classKind = s.classKind;
+      const classValue = s.classValue;
       const target = s.target;
       const targetRect = target ? target.getBoundingClientRect() : null;
       const ghost = s.ghost;
       const moved = dropDate && dropDate !== s.item.date;
-      const commit = !!(reorderTarget || moved);
+      const commit = !!(reorderTarget || classTarget || moved);
       clearTarget();
+      hideClassDock();
       document.body.classList.remove('is-dragging');
       App.ui.dragSuppressUntil = Date.now() + 450;
       if (ghost) {
@@ -1146,7 +1258,8 @@
       }
       if (s.card) s.card.classList.remove('drag-source');
       state = null;
-      if (reorderTarget) reorderItemCards(s.card, reorderTarget);
+      if (classTarget) classifyItem(s.item, classKind, classValue);
+      else if (reorderTarget) reorderItemCards(s.card, reorderTarget);
       else if (moved) moveItemToDate(s.item, dropDate);
     }
 
@@ -1329,7 +1442,7 @@
       });
       const ids = [...s.container.querySelectorAll(cardSelector(s.kind))].map((el) => el.dataset.id);
       const patch = s.kind === 'track' ? { trackOrder: ids } : { courseOrder: ids };
-      window.dayflow.updateSettings(patch).then(() => toast('排序已更新'));
+      saveSettings(patch).then(() => toast('排序已更新')).catch(() => toast('排序保存失败，请重试。'));
     }
 
     function onUp(e) {
@@ -2018,7 +2131,7 @@
     } else {
       patch[key] = value;
     }
-    await window.dayflow.updateSettings(patch);
+    await saveSettings(patch);
     if (key === 'motion' || key === 'notify' || key === 'closeToTray') applyMotion();
   }
 
@@ -2032,7 +2145,7 @@
         setFilter(node.dataset.domain);
         break;
       case 'sort-reset':
-        await window.dayflow.updateSettings({ itemOrder: [] });
+        await saveSettings({ itemOrder: [] });
         toast('已恢复按时间排序');
         break;
       case 'ov-week': {
