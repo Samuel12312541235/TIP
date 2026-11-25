@@ -1108,6 +1108,8 @@
       if (!state) return;
       if (state.raf) cancelAnimationFrame(state.raf);
       if (state.scrollRaf) cancelAnimationFrame(state.scrollRaf);
+      const dragView = qs('#view');
+      if (dragView) dragView.style.scrollBehavior = state.prevScrollBehavior || '';
       clearTarget();
       if (state.card) state.card.classList.remove('drag-source');
       document.body.classList.remove('is-dragging');
@@ -1165,6 +1167,7 @@
         dropDate: '',
         raf: 0,
         scrollRaf: 0,
+        prevScrollBehavior: '',
         pointerId: e.pointerId,
       };
       try {
@@ -1199,6 +1202,11 @@
       state.card.classList.add('drag-source');
       document.body.classList.add('is-dragging');
       if (state.card.matches('.item, .task-card, .pchip, .cal-ev')) showClassDock();
+      const view = qs('#view');
+      if (view) {
+        state.prevScrollBehavior = view.style.scrollBehavior;
+        view.style.scrollBehavior = 'auto';
+      }
       state.scrollRaf = requestAnimationFrame(autoScroll);
     }
 
@@ -1287,6 +1295,8 @@
       window.removeEventListener('keydown', onKey, true);
       if (s.raf) cancelAnimationFrame(s.raf);
       if (s.scrollRaf) cancelAnimationFrame(s.scrollRaf);
+      const dragView = qs('#view');
+      if (dragView) dragView.style.scrollBehavior = s.prevScrollBehavior || '';
       const reorderTarget = s.reorderTarget;
       const classTarget = s.classTarget;
       const classKind = s.classKind;
