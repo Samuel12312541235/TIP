@@ -493,7 +493,7 @@
       if (it.kind === 'deadline' || it.kind === 'quiz') {
         return `<div class="g-milestone ${it.priority === 3 ? 'key' : ''}" data-id="${it.id}" data-start="${it.date}" data-idx="${startIdx}" data-len="1" data-clip="${clipped ? 1 : 0}" style="left:${pct(startIdx + 0.5)}%;--c:${d.color}" title="${esc(title)}"><i></i></div>`;
       }
-      return `<div class="g-bar ${it.endDate ? 'multi' : ''} ${wide ? 'wide' : ''} ${it.priority === 3 ? 'key' : ''}" data-id="${it.id}" data-start="${it.date}" data-idx="${startIdx}" data-end="${it.endDate || ''}" data-len="${len}" data-clip="${clipped ? 1 : 0}" style="left:${pct(startIdx)}%;width:${pct(len)}%;--c:${d.color}" title="${esc(title)}">${wide ? `<span>${esc(it.title)}</span>` : ''}<i class="g-resize" title="拖右边改结束日期"></i></div>`;
+      return `<div class="g-bar ${it.endDate ? 'multi' : ''} ${wide ? 'wide' : ''} ${it.priority === 3 ? 'key' : ''}" data-id="${it.id}" data-start="${it.date}" data-idx="${startIdx}" data-end="${it.endDate || ''}" data-len="${len}" data-clip="${clipped ? 1 : 0}" style="left:${pct(startIdx)}%;width:${pct(len)}%;--c:${d.color}" title="${esc(title)}">${wide ? `<span class="gb-title">${esc(it.title)}</span>` : ''}<span class="mini-acts g-acts"><button class="mini-act" data-act="quick-edit" data-id="${it.id}" title="修改">${icon('edit')}</button><button class="mini-act danger" data-act="quick-delete" data-id="${it.id}" title="删除">${icon('trash')}</button></span><i class="g-resize" title="拖右边改结束日期"></i></div>`;
     };
 
     return `<div class="view-inner gantt-page">
@@ -592,7 +592,13 @@
         const visible = dayItems.slice(0, 2);
         rows += `<div class="pday ${date === today ? 'today' : ''}" data-act="day" data-date="${date}" data-drop-date="${date}">
           <div class="pd-num"><b>${Number(date.slice(8))}</b>${dayItems.length ? `<span>${dayItems.length}</span>` : ''}</div>
-          ${visible.map((i) => `<div class="pchip drag-mini ${i.status === 'done' ? 'done' : ''}" data-drag-id="${i.id}" style="${cv(domOf(ctx, i.domain))}">${i.time ? i.time + ' ' : ''}${esc(i.title)}</div>`).join('')}
+          ${visible.map((i) => `<div class="pchip drag-mini ${i.status === 'done' ? 'done' : ''}" data-drag-id="${i.id}" data-id="${i.id}" data-act="quick-edit" style="${cv(domOf(ctx, i.domain))}">
+            <span class="pc-text">${i.time ? i.time + ' ' : ''}${esc(i.title)}</span>
+            <span class="mini-acts">
+              <button class="mini-act" data-act="quick-edit" data-id="${i.id}" title="修改">${icon('edit')}</button>
+              <button class="mini-act danger" data-act="quick-delete" data-id="${i.id}" title="删除">${icon('trash')}</button>
+            </span>
+          </div>`).join('')}
           ${dayItems.length > 2 ? `<div class="pmore">+${dayItems.length - 2}</div>` : ''}
         </div>`;
       }
@@ -637,7 +643,13 @@
       const out = date.slice(0, 7) !== cursor;
       cells += `<div class="cal-cell ${out ? 'out' : ''} ${date === today ? 'today' : ''} ${date === sel ? 'sel' : ''}" data-act="sel" data-date="${date}" data-drop-date="${date}">
         <div class="cc-num"><span>${Number(date.slice(8))}</span>${date === today ? '<span class="cc-dot"></span>' : ''}</div>
-        ${items.slice(0, 2).map((x) => `<div class="cal-ev drag-mini" data-drag-id="${x.id}" style="${cv(domOf(ctx, x.domain))}">${esc(x.title)}</div>`).join('')}
+        ${items.slice(0, 2).map((x) => `<div class="cal-ev drag-mini" data-drag-id="${x.id}" data-id="${x.id}" data-act="quick-edit" style="${cv(domOf(ctx, x.domain))}">
+          <span class="ce-text">${esc(x.title)}</span>
+          <span class="mini-acts">
+            <button class="mini-act" data-act="quick-edit" data-id="${x.id}" title="修改">${icon('edit')}</button>
+            <button class="mini-act danger" data-act="quick-delete" data-id="${x.id}" title="删除">${icon('trash')}</button>
+          </span>
+        </div>`).join('')}
         ${items.length > 2 ? `<div class="cal-more">+${items.length - 2}</div>` : ''}
       </div>`;
     }
@@ -687,8 +699,17 @@
 
   /* ── 规划 ─────────────────────────────────────────────── */
   R.projects = function (ctx) {
-    const tracks = ctx.state.tracks || [];
-    const courses = ctx.state.courses || [];
+    const orderList = (list, order) =>
+      list
+        .map((x, i) => ({ x, i }))
+        .sort((a, b) => {
+          const ai = order.indexOf(a.x.id);
+          const bi = order.indexOf(b.x.id);
+          return (ai < 0 ? 1000 + a.i : ai) - (bi < 0 ? 1000 + b.i : bi);
+        })
+        .map((o) => o.x);
+    const tracks = orderList(ctx.state.tracks || [], ctx.state.settings.trackOrder || []);
+    const courses = orderList(ctx.state.courses || [], ctx.state.settings.courseOrder || []);
     const open = ctx.state.items.filter(isOpen);
 
     return `<div class="view-inner">
@@ -703,7 +724,7 @@
             const pct = trackPct(t);
             const linked = open.filter((i) => i.trackId === t.id).length;
             const oddLast = idx === tracks.length - 1 && tracks.length % 2 === 1;
-            return `<section class="card hoverable track-card ${oddLast ? 'wide' : ''} rise" data-act="track" data-id="${t.id}" style="--i:${idx};${cv(d)}">
+            return `<section class="card hoverable track-card ${oddLast ? 'wide' : ''} rise" data-act="track" data-id="${t.id}" data-card-kind="track" style="--i:${idx};${cv(d)}">
               <div class="tc-head">
                 <div>
                   <div class="tc-title">${esc(t.title)}</div>
@@ -721,7 +742,9 @@
                 <span class="tc-pct">${pct}%</span>
                 <span class="tc-sub">${linked} 项在办</span>
                 <span class="spacer" style="flex:1"></span>
+                <button class="icon-btn order-grip" data-act="order" data-order-handle data-order-kind="track" data-id="${t.id}" title="拖动排序">${icon('grip')}</button>
                 <button class="icon-btn" data-act="track" data-id="${t.id}" title="更新进度">${icon('edit')}</button>
+                <button class="icon-btn danger" data-act="track-del" data-id="${t.id}" title="删除主线">${icon('trash')}</button>
               </div>
             </section>`;
           })
@@ -735,10 +758,15 @@
             ${courses
               .map((c) => {
                 const next = open.filter((i) => i.course === c.id).sort(byUrgency)[0];
-                return `<div class="course-row" style="--c:${c.color}" data-act="course" data-id="${c.id}">
+                return `<div class="course-row" style="--c:${c.color}" data-act="course" data-id="${c.id}" data-card-kind="course">
                   <span class="cr-dot"></span><span class="cr-name">${esc(c.name)}</span>
                   <span class="cr-next">${next ? esc(next.title) : '暂无待办'}</span>
                   <span class="cr-date">${next ? relLabel(next.date) : ''}</span>
+                  <span class="cr-acts">
+                    <button class="mini-act" data-act="order" data-order-handle data-order-kind="course" data-id="${c.id}" title="拖动排序">${icon('grip')}</button>
+                    <button class="mini-act" data-act="course-edit" data-id="${c.id}" title="编辑课程">${icon('edit')}</button>
+                    <button class="mini-act danger" data-act="course-del" data-id="${c.id}" title="删除课程">${icon('trash')}</button>
+                  </span>
                 </div>`;
               })
               .join('')}
@@ -1092,7 +1120,20 @@
           )
           .join('')}
       </div>
-      <div class="drawer-foot"><span class="spacer"></span><button class="btn ghost" data-act="drawer-close">取消</button><button class="btn primary" data-act="track-save">保存</button></div>
+      <div class="drawer-foot"><button class="btn ghost" data-act="track-del" style="color:var(--danger)">${icon('trash')}</button><span class="spacer"></span><button class="btn ghost" data-act="drawer-close">取消</button><button class="btn primary" data-act="track-save">保存</button></div>
+    </div>`;
+  };
+
+  R.courseDrawer = function (ctx, c) {
+    return `<div class="drawer" role="dialog" aria-modal="true">
+      <div class="drawer-head"><div class="drawer-title">编辑课程</div><button class="icon-btn" data-act="drawer-close">${icon('close')}</button></div>
+      <div class="drawer-body">
+        <input class="input title-input" data-course-field="name" value="${esc(c.name || '')}" placeholder="课程名称" />
+        <label class="mini-field">简称<input class="input" data-course-field="short" value="${esc(c.short || '')}" placeholder="用于卡片" /></label>
+        <label class="mini-field">颜色<input class="input" type="color" data-course-field="color" value="${esc(c.color || '#4361EE')}" /></label>
+        <textarea class="textarea" data-course-field="note" placeholder="备注">${esc(c.note || '')}</textarea>
+      </div>
+      <div class="drawer-foot"><button class="btn ghost" data-act="course-del" style="color:var(--danger)">${icon('trash')}</button><span class="spacer"></span><button class="btn ghost" data-act="drawer-close">取消</button><button class="btn primary" data-act="course-save">${icon('check')} 保存</button></div>
     </div>`;
   };
 

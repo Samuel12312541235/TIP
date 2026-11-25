@@ -284,6 +284,50 @@ class Store extends EventEmitter {
     return t;
   }
 
+  deleteTrack(id, actor = 'user') {
+    const idx = this.state.tracks.findIndex((x) => x.id === id);
+    if (idx < 0) return null;
+    const [removed] = this.state.tracks.splice(idx, 1);
+    let unlinked = 0;
+    this.state.items.forEach((i) => {
+      if (i.trackId === id) {
+        i.trackId = '';
+        unlinked += 1;
+      }
+    });
+    this.log({ actor, action: 'track-delete', detail: removed.title });
+    this.changed('track');
+    return { removed, unlinked };
+  }
+
+  updateCourse(id, patch = {}) {
+    const c = (this.state.courses || []).find((x) => x.id === id);
+    if (!c) return null;
+    if (patch.name !== undefined) c.name = String(patch.name).slice(0, 60);
+    if (patch.short !== undefined) c.short = String(patch.short).slice(0, 20);
+    if (patch.note !== undefined) c.note = String(patch.note).slice(0, 300);
+    if (patch.color !== undefined && /^#[0-9a-f]{6}$/i.test(String(patch.color))) c.color = String(patch.color);
+    this.log({ actor: patch.actor || 'user', action: 'course-update', detail: c.name });
+    this.changed('course');
+    return c;
+  }
+
+  deleteCourse(id, actor = 'user') {
+    const idx = (this.state.courses || []).findIndex((x) => x.id === id);
+    if (idx < 0) return null;
+    const [removed] = this.state.courses.splice(idx, 1);
+    let unlinked = 0;
+    this.state.items.forEach((i) => {
+      if (i.course === id) {
+        i.course = '';
+        unlinked += 1;
+      }
+    });
+    this.log({ actor, action: 'course-delete', detail: removed.name });
+    this.changed('course');
+    return { removed, unlinked };
+  }
+
   updateSettings(patch = {}) {
     const s = this.state.settings;
     const next = JSON.parse(JSON.stringify(patch));

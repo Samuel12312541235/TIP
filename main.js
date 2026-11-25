@@ -642,6 +642,9 @@ function registerIpc() {
     const track = store.updateTrack(id, patch);
     return track;
   });
+  ipcMain.handle('track:delete', (_e, id) => store.deleteTrack(id, 'user'));
+  ipcMain.handle('course:update', (_e, payload = {}) => store.updateCourse(payload.id, payload));
+  ipcMain.handle('course:delete', (_e, id) => store.deleteCourse(id, 'user'));
   ipcMain.handle('track:add', (_e, payload) => {
     const track = store.addTrack(payload);
     return track;

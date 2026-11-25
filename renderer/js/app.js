@@ -39,6 +39,7 @@
     },
     draft: null,
     trackDraft: null,
+    courseDraft: null,
     palette: { open: false, query: '', index: 0, rows: [] },
     savedScroll: 0,
   };
@@ -483,6 +484,7 @@
 
     view.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
+      if (e.target.closest('.mini-acts, .mini-act')) return;
       const bar = e.target.closest('.g-bar, .g-milestone');
       if (!bar || bar.dataset.clip === '1') return;
       const track = bar.closest('.g-track');
@@ -720,6 +722,8 @@
       }, 60);
     } else if (App.trackDraft) {
       wrap.innerHTML = `<div class="drawer-backdrop" data-act="drawer-close"></div>${R.trackDrawer(ctx(), App.trackDraft)}`;
+    } else if (App.courseDraft) {
+      wrap.innerHTML = `<div class="drawer-backdrop" data-act="drawer-close"></div>${R.courseDrawer(ctx(), App.courseDraft)}`;
     }
   }
 
@@ -733,6 +737,7 @@
     }, 200);
     App.draft = null;
     App.trackDraft = null;
+    App.courseDraft = null;
   }
 
   function collectDraft() {
@@ -900,7 +905,7 @@
       'click',
       (e) => {
         if (Date.now() < (App.ui.dragSuppressUntil || 0) && e.target instanceof Element) {
-          if (e.target.closest('[data-act], [data-drag-handle], .pchip, .cal-ev')) {
+          if (e.target.closest('[data-act], [data-drag-handle], [data-order-handle], .pchip, .cal-ev')) {
             e.preventDefault();
             e.stopPropagation();
           }
@@ -941,6 +946,7 @@
     function onDown(e) {
       if (state) return;
       if (e.button !== undefined && e.button !== 0) return;
+      if (e.target.closest('.mini-acts, .mini-act')) return;
       const handle = e.target.closest('[data-drag-handle], .drag-mini[data-drag-id]');
       if (!handle || !App.state) return;
       const card = sourceCard(handle);
@@ -1109,6 +1115,176 @@
       if (!state) return;
       if (state.started) finishDrag('');
       else {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey, true);
+        state = null;
+      }
+    }
+
+    document.addEventListener('pointerdown', onDown, true);
+  }
+
+  /* ── 主线 / 课程卡片拖动排序 ───────────────────────── */
+  function initOrderDrag() {
+    let state = null;
+
+    function cardSelector(kind) {
+      return kind === 'track' ? '.track-card' : '.course-row';
+    }
+
+    function clearTarget() {
+      if (state && state.target) state.target.classList.remove('order-over');
+      if (state) state.target = null;
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape' && state) finish('');
+    }
+
+    function onDown(e) {
+      if (state || e.button !== 0) return;
+      const handle = e.target.closest('[data-order-handle]');
+      if (!handle) return;
+      const kind = handle.dataset.orderKind;
+      if (kind !== 'track' && kind !== 'course') return;
+      const source = handle.closest(cardSelector(kind));
+      const container = source && source.parentElement;
+      if (!source || !container) return;
+      e.preventDefault();
+      const rect = source.getBoundingClientRect();
+      if (!rect.width) return;
+      state = { handle, kind, source, container, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, rect, started: false, ghost: null, target: null };
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      window.addEventListener('keydown', onKey, true);
+    }
+
+    function startGhost() {
+      if (!state || state.started) return;
+      state.started = true;
+      App.ui.dragSuppressUntil = Date.now() + 500;
+      const g = state.source.cloneNode(true);
+      g.classList.add('drag-ghost', 'order-ghost');
+      g.classList.remove('order-source', 'rise', 'pulse');
+      g.style.left = `${state.rect.left}px`;
+      g.style.top = `${state.rect.top}px`;
+      g.style.width = `${state.rect.width}px`;
+      g.style.height = `${state.rect.height}px`;
+      g.style.transform = 'translate3d(0,0,0) scale(1.015)';
+      document.body.appendChild(g);
+      state.ghost = g;
+      state.source.classList.add('order-source');
+      document.body.classList.add('is-dragging');
+    }
+
+    function onMove(e) {
+      if (!state) return;
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
+      if (!state.started) {
+        if (Math.hypot(e.clientX - state.startX, e.clientY - state.startY) < 6) return;
+        startGhost();
+      }
+      e.preventDefault();
+      const dx = state.lastX - state.startX;
+      const dy = state.lastY - state.startY;
+      const tilt = DF.reduced() ? 0 : Math.max(-2.4, Math.min(2.4, dx / 50));
+      state.ghost.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.015) rotate(${tilt}deg)`;
+      const under = document.elementFromPoint(state.lastX, state.lastY);
+      const candidate = under && under.closest(cardSelector(state.kind));
+      const target = candidate && candidate !== state.source ? candidate : null;
+      if (target !== state.target) {
+        clearTarget();
+        state.target = target;
+        if (target) target.classList.add('order-over');
+      }
+    }
+
+    function finish(commit) {
+      if (!state) return;
+      const s = state;
+      const target = s.target;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('keydown', onKey, true);
+      clearTarget();
+      const ghost = s.ghost;
+      if (ghost) {
+        if (commit && target) {
+          ghost.style.opacity = '0';
+          setTimeout(() => ghost.remove(), 180);
+        } else {
+          const anim = ghost.animate(
+            [
+              { transform: ghost.style.transform, opacity: 0.98 },
+              { transform: 'translate3d(0,0,0) scale(1) rotate(0deg)', opacity: 1 },
+            ],
+            { duration: 240, easing: 'cubic-bezier(.2,.9,.25,1.15)', fill: 'forwards' }
+          );
+          anim.onfinish = () => ghost.remove();
+        }
+      }
+      s.source.classList.remove('order-source');
+      document.body.classList.remove('is-dragging');
+      state = null;
+      if (!commit || !target) return;
+
+      const before = new Map();
+      [...s.container.children].forEach((el) => before.set(el, el.getBoundingClientRect()));
+      s.container.insertBefore(s.source, target);
+      [...s.container.children].forEach((el) => {
+        const a = before.get(el);
+        if (!a) return;
+        const b = el.getBoundingClientRect();
+        const dx = a.left - b.left;
+        const dy = a.top - b.top;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+        el.animate(
+          [
+            { transform: `translate(${dx}px, ${dy}px)` },
+            { transform: 'translate(0,0)' },
+          ],
+          { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+      });
+      const ids = [...s.container.querySelectorAll(cardSelector(s.kind))].map((el) => el.dataset.id);
+      const patch = s.kind === 'track' ? { trackOrder: ids } : { courseOrder: ids };
+      window.dayflow.updateSettings(patch).then(() => toast('排序已更新'));
+    }
+
+    function onUp(e) {
+      if (!state) return;
+      const s = state;
+      if (!s.started) {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey, true);
+        state = null;
+        return;
+      }
+      e.preventDefault();
+      try {
+        s.handle.releasePointerCapture(s.pointerId);
+      } catch (_) {}
+      const commit = !!s.target;
+      const target = s.target;
+      // keep target for finish; clearTarget happens inside finish
+      state = s;
+      state.target = target;
+      finish(commit);
+    }
+
+    function onCancel() {
+      if (state && state.started) finish('');
+      else if (state) {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onCancel);
@@ -1829,6 +2005,9 @@
       case 'drag':
         e && e.preventDefault();
         break;
+      case 'order':
+        e && e.preventDefault();
+        break;
       case 'key-toggle': {
         e && e.preventDefault();
         e && e.stopPropagation();
@@ -1929,6 +2108,34 @@
         }
         break;
       }
+      case 'track-del':
+        e && e.stopPropagation();
+        if (!App.trackDraft) {
+          const tr = (App.state.tracks || []).find((x) => x.id === node.dataset.id);
+          if (tr) App.trackDraft = JSON.parse(JSON.stringify(tr));
+        }
+        await deleteTrackSafe();
+        break;
+      case 'course-edit': {
+        e && e.stopPropagation();
+        const c = (App.state.courses || []).find((x) => x.id === node.dataset.id);
+        if (c) {
+          App.courseDraft = JSON.parse(JSON.stringify(c));
+          renderDrawer();
+        }
+        break;
+      }
+      case 'course-save':
+        await saveCourse();
+        break;
+      case 'course-del':
+        e && e.stopPropagation();
+        if (!App.courseDraft) {
+          const c = (App.state.courses || []).find((x) => x.id === node.dataset.id);
+          if (c) App.courseDraft = JSON.parse(JSON.stringify(c));
+        }
+        await deleteCourseSafe();
+        break;
       case 'drawer-close':
         closeDrawer();
         break;
@@ -2093,6 +2300,44 @@
       card.classList.add('pulse');
       setTimeout(() => card.classList.remove('pulse'), 720);
     }, 180);
+  }
+
+  async function deleteTrackSafe() {
+    const tr = App.trackDraft;
+    if (!tr) return;
+    if (!window.confirm(`删除主线「${tr.title}」？关联日程会保留，但会解除与这条主线的关联。`)) return;
+    await window.dayflow.deleteTrack(tr.id);
+    closeDrawer();
+    toast('已删除主线');
+  }
+
+  async function saveCourse() {
+    const c = App.courseDraft;
+    if (!c) return;
+    const name = (qs('[data-course-field="name"]') || {}).value || '';
+    if (!name.trim()) {
+      toast('请填写课程名称。');
+      return;
+    }
+    const patch = {
+      id: c.id,
+      name: name.trim(),
+      short: (qs('[data-course-field="short"]') || {}).value || '',
+      color: (qs('[data-course-field="color"]') || {}).value || c.color,
+      note: (qs('[data-course-field="note"]') || {}).value || '',
+    };
+    await window.dayflow.updateCourse(patch);
+    closeDrawer();
+    toast('课程已更新');
+  }
+
+  async function deleteCourseSafe() {
+    const c = App.courseDraft;
+    if (!c) return;
+    if (!window.confirm(`删除课程「${c.name}」？关联日程会保留，但会解除课程关联。`)) return;
+    await window.dayflow.deleteCourse(c.id);
+    closeDrawer();
+    toast('已删除课程');
   }
 
   /* ── 抽屉里的自定义交互 ───────────────────────────────── */
@@ -2333,6 +2578,7 @@
     bindGlobal();
     bindGanttDrag();
     initCardDrag();
+    initOrderDrag();
     window.dayflow.onHealth((data) => toast((data && data.tip) || '请起身活动一下。', { icon: 'spark' }));
 
     window.dayflow.onState((payload) => {
