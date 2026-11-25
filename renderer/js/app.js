@@ -48,6 +48,7 @@
   function setPayload(p) {
     App.payload = p;
     App.state = p.state;
+    if (window.Render && window.Render.setOrder) window.Render.setOrder((p.state.settings || {}).itemOrder || []);
     App.domainMap = {};
     (p.state.domains || []).forEach((d) => (App.domainMap[d.id] = d));
     App.autostart = !!p.autostart;
@@ -898,6 +899,35 @@
     }, 220);
   }
 
+  function reorderItemCards(source, target) {
+    if (!source || !target || source.parentElement !== target.parentElement) return false;
+    const container = source.parentElement;
+    const before = new Map();
+    [...container.children].forEach((el) => before.set(el, el.getBoundingClientRect()));
+    container.insertBefore(source, target);
+    [...container.children].forEach((el) => {
+      const a = before.get(el);
+      if (!a) return;
+      const b = el.getBoundingClientRect();
+      const dx = a.left - b.left;
+      const dy = a.top - b.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0,0)' }],
+        { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }
+      );
+    });
+    const visible = [...container.querySelectorAll(':scope > .item, :scope > .task-card')].map((el) => el.dataset.id).filter(Boolean);
+    const prev = (App.state.settings.itemOrder || []).slice();
+    const next = [...visible, ...prev.filter((id) => !visible.includes(id))];
+    window.dayflow.updateSettings({ itemOrder: next });
+    toastAction('顺序已更新', '撤销', async () => {
+      await window.dayflow.updateSettings({ itemOrder: prev });
+      toast('已恢复排序');
+    });
+    return true;
+  }
+
   function initCardDrag() {
     let state = null;
 
@@ -915,9 +945,16 @@
     );
 
     function clearTarget() {
-      if (!state || !state.target) return;
-      state.target.classList.remove('drop-over', 'over');
+      if (!state || !state.target) {
+        if (state) {
+          state.reorderTarget = null;
+          state.dropDate = '';
+        }
+        return;
+      }
+      state.target.classList.remove('drop-over', 'over', 'reorder-over');
       state.target = null;
+      state.reorderTarget = null;
       state.dropDate = '';
     }
 
@@ -947,9 +984,19 @@
       if (state) return;
       if (e.button !== undefined && e.button !== 0) return;
       if (e.target.closest('.mini-acts, .mini-act')) return;
-      const handle = e.target.closest('[data-drag-handle], .drag-mini[data-drag-id]');
-      if (!handle || !App.state) return;
-      const card = sourceCard(handle);
+      const explicit = e.target.closest('[data-drag-handle], .drag-mini[data-drag-id]');
+      const interactive = e.target.closest('button, a, input, textarea, select, .check, .qa, .task-flag, .task-done, .mini-acts');
+      let handle = explicit;
+      let card = null;
+      if (explicit) {
+        card = sourceCard(explicit);
+      } else {
+        const body = e.target.closest('.item, .task-card');
+        if (!body || interactive) return;
+        handle = body;
+        card = body;
+      }
+      if (!handle || !card || !App.state) return;
       const id = handle.dataset.dragId || card.dataset.id;
       const item = App.state.items.find((i) => i.id === id);
       if (!item) return;
@@ -967,6 +1014,7 @@
         started: false,
         ghost: null,
         target: null,
+        reorderTarget: null,
         dropDate: '',
         raf: 0,
         pointerId: e.pointerId,
@@ -974,7 +1022,7 @@
       try {
         handle.setPointerCapture(e.pointerId);
       } catch (_) {}
-      if (handle.hasAttribute('data-drag-handle')) {
+      if (explicit && handle.hasAttribute('data-drag-handle')) {
         e.preventDefault();
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       }
@@ -1002,7 +1050,6 @@
       state.ghost = g;
       state.card.classList.add('drag-source');
       document.body.classList.add('is-dragging');
-      showDragRail();
     }
 
     function paintGhost() {
@@ -1013,13 +1060,27 @@
       const tilt = reduced ? 0 : Math.max(-3.5, Math.min(3.5, dx / 24));
       state.ghost.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.025) rotate(${tilt}deg)`;
       const under = document.elementFromPoint(state.lastX, state.lastY);
-      const target = under && under.closest('[data-drop-date]');
+      const cardUnder = under && under.closest('.item, .task-card');
+      const canReorder = !!(
+        cardUnder &&
+        state.card &&
+        state.card.matches('.item, .task-card') &&
+        cardUnder !== state.card &&
+        cardUnder.parentElement === state.card.parentElement
+      );
+      const dateTarget = under && under.closest('[data-drop-date]');
+      const target = canReorder ? cardUnder : dateTarget;
       if (target !== state.target) {
         clearTarget();
         state.target = target;
+        state.reorderTarget = canReorder ? cardUnder : null;
         if (target) {
-          state.dropDate = target.dataset.dropDate || '';
-          target.classList.add(target.classList.contains('drag-slot') ? 'over' : 'drop-over');
+          if (canReorder) {
+            target.classList.add('reorder-over');
+          } else {
+            state.dropDate = target.dataset.dropDate || '';
+            target.classList.add(target.classList.contains('drag-slot') ? 'over' : 'drop-over');
+          }
         }
       }
     }
@@ -1050,16 +1111,17 @@
       window.removeEventListener('pointercancel', onCancel);
       window.removeEventListener('keydown', onKey, true);
       if (s.raf) cancelAnimationFrame(s.raf);
+      const reorderTarget = s.reorderTarget;
       const target = s.target;
       const targetRect = target ? target.getBoundingClientRect() : null;
       const ghost = s.ghost;
       const moved = dropDate && dropDate !== s.item.date;
+      const commit = !!(reorderTarget || moved);
       clearTarget();
-      hideDragRail();
       document.body.classList.remove('is-dragging');
       App.ui.dragSuppressUntil = Date.now() + 450;
       if (ghost) {
-        if (moved && targetRect) {
+        if (commit && targetRect) {
           const sr = s.rect;
           const tx = targetRect.left + targetRect.width / 2 - (sr.left + sr.width / 2);
           const ty = targetRect.top + targetRect.height / 2 - (sr.top + sr.height / 2);
@@ -1084,9 +1146,8 @@
       }
       if (s.card) s.card.classList.remove('drag-source');
       state = null;
-      if (moved) {
-        moveItemToDate(s.item, dropDate);
-      }
+      if (reorderTarget) reorderItemCards(s.card, reorderTarget);
+      else if (moved) moveItemToDate(s.item, dropDate);
     }
 
     function onUp(e) {
@@ -1145,14 +1206,26 @@
 
     function onDown(e) {
       if (state || e.button !== 0) return;
-      const handle = e.target.closest('[data-order-handle]');
-      if (!handle) return;
-      const kind = handle.dataset.orderKind;
-      if (kind !== 'track' && kind !== 'course') return;
-      const source = handle.closest(cardSelector(kind));
+      const explicit = e.target.closest('[data-order-handle]');
+      const interactive = e.target.closest('button, a, input, textarea, select, .tc-foot, .cr-acts');
+      let handle = explicit;
+      let source = null;
+      let kind = '';
+      if (explicit) {
+        kind = explicit.dataset.orderKind;
+        if (kind !== 'track' && kind !== 'course') return;
+        source = explicit.closest(cardSelector(kind));
+      } else {
+        const body = e.target.closest('.track-card, .course-row');
+        if (!body || interactive) return;
+        source = body;
+        kind = body.dataset.cardKind;
+        if (kind !== 'track' && kind !== 'course') return;
+        handle = body;
+      }
       const container = source && source.parentElement;
       if (!source || !container) return;
-      e.preventDefault();
+      if (explicit) e.preventDefault();
       const rect = source.getBoundingClientRect();
       if (!rect.width) return;
       state = { handle, kind, source, container, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, rect, started: false, ghost: null, target: null };
@@ -1957,6 +2030,10 @@
         break;
       case 'filter':
         setFilter(node.dataset.domain);
+        break;
+      case 'sort-reset':
+        await window.dayflow.updateSettings({ itemOrder: [] });
+        toast('已恢复按时间排序');
         break;
       case 'ov-week': {
         const w = Number(node.dataset.week);

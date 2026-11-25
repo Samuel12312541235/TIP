@@ -4,6 +4,10 @@
   const { icon, esc, md, weekday, dueLabel, diffDays, relLabel, addDays, startOfWeek, weekNo, WD_SHORT, MONTH_CN, parseISO, iso, pad } = window.DF;
 
   const R = {};
+  let manualOrder = [];
+  R.setOrder = function (order) {
+    manualOrder = Array.isArray(order) ? order : [];
+  };
 
   /* ── 常用 ─────────────────────────────────────────────── */
   const byDate = (a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99'));
@@ -17,6 +21,19 @@
     const timeCmp = (a.time || '24:00').localeCompare(b.time || '24:00');
     if (timeCmp) return timeCmp;
     return (b.priority || 0) - (a.priority || 0);
+  };
+  const byList = (a, b) => {
+    const ad = a.status === 'done' || a.status === 'dropped';
+    const bd = b.status === 'done' || b.status === 'dropped';
+    if (ad !== bd) return ad ? 1 : -1;
+    const ai = manualOrder.indexOf(a.id);
+    const bi = manualOrder.indexOf(b.id);
+    if (ai >= 0 || bi >= 0) {
+      if (ai < 0) return 1;
+      if (bi < 0) return -1;
+      if (ai !== bi) return ai - bi;
+    }
+    return byUrgency(a, b);
   };
   const isOpen = (i) => i.status !== 'done' && i.status !== 'dropped';
   const domOf = (ctx, id) => ctx.domainMap[id] || ctx.state.domains[0];
@@ -130,10 +147,10 @@
     const pool = [...overdue, ...todayOpen].filter(inFilter);
     const focus = pool
       .filter((i) => i.priority === 3 || i.kind === 'deadline' || i.kind === 'quiz')
-      .sort(byUrgency)
+      .sort(byList)
       .slice(0, 3);
     const focused = new Set(focus.map((i) => i.id));
-    const restAll = pool.filter((i) => !focused.has(i.id)).sort(byUrgency);
+    const restAll = pool.filter((i) => !focused.has(i.id)).sort(byList);
     const rest = restAll.slice(0, 4);
     const restMore = restAll.length - rest.length;
     const doneList = doneToday.filter(inFilter);
@@ -148,7 +165,7 @@
 
     const deadlines = open
       .filter((i) => i.date >= today && i.date <= addDays(today, 32) && (i.kind === 'deadline' || i.kind === 'quiz' || i.kind === 'event' || i.priority === 3))
-      .sort(byUrgency)
+      .sort(byList)
       .slice(0, 5);
 
     const routines = s.settings.routines || [];
@@ -478,7 +495,7 @@
     const groups = s.domains
       .map((d) => ({
         d,
-        items: items.filter((i) => i.domain === d.id).sort(byUrgency),
+        items: items.filter((i) => i.domain === d.id).sort(byList),
       }))
       .filter((g) => g.items.length);
 
@@ -588,7 +605,7 @@
       rows += `<div class="pweek-label ${isNow ? 'now' : ''}"><b>W${wNo}</b><span>${md(wStart)}</span></div>`;
       for (let d = 0; d < 7; d++) {
         const date = addDays(wStart, d);
-        const dayItems = all.filter((i) => i.date === date || (i.endDate && i.date <= date && i.endDate >= date)).sort(byUrgency);
+        const dayItems = all.filter((i) => i.date === date || (i.endDate && i.date <= date && i.endDate >= date)).sort(byList);
         const visible = dayItems.slice(0, 2);
         rows += `<div class="pday ${date === today ? 'today' : ''}" data-act="day" data-date="${date}" data-drop-date="${date}">
           <div class="pd-num"><b>${Number(date.slice(8))}</b>${dayItems.length ? `<span>${dayItems.length}</span>` : ''}</div>
@@ -639,7 +656,7 @@
       const date = addDays(gridStart, i);
       const items = all
         .filter((x) => (x.date === date || (x.endDate && x.date <= date && x.endDate >= date)) && (filter === 'all' || x.domain === filter))
-        .sort(byUrgency);
+        .sort(byList);
       const out = date.slice(0, 7) !== cursor;
       cells += `<div class="cal-cell ${out ? 'out' : ''} ${date === today ? 'today' : ''} ${date === sel ? 'sel' : ''}" data-act="sel" data-date="${date}" data-drop-date="${date}">
         <div class="cc-num"><span>${Number(date.slice(8))}</span>${date === today ? '<span class="cc-dot"></span>' : ''}</div>
@@ -654,7 +671,7 @@
       </div>`;
     }
 
-    const selItems = all.filter((x) => x.date === sel || (x.endDate && x.date <= sel && x.endDate >= sel)).sort(byUrgency);
+    const selItems = all.filter((x) => x.date === sel || (x.endDate && x.date <= sel && x.endDate >= sel)).sort(byList);
     const monthItems = all.filter((x) => x.date.slice(0, 7) === cursor);
     const monthDone = monthItems.filter((x) => x.status === 'done').length;
 
@@ -757,7 +774,7 @@
           <div class="course-list">
             ${courses
               .map((c) => {
-                const next = open.filter((i) => i.course === c.id).sort(byUrgency)[0];
+                const next = open.filter((i) => i.course === c.id).sort(byList)[0];
                 return `<div class="course-row" style="--c:${c.color}" data-act="course" data-id="${c.id}" data-card-kind="course">
                   <span class="cr-dot"></span><span class="cr-name">${esc(c.name)}</span>
                   <span class="cr-next">${next ? esc(next.title) : '暂无待办'}</span>
@@ -783,13 +800,14 @@
     const sel = ctx.ui.dailyDay || 'today';
     const open = s.items.filter(isOpen);
     const doneAll = s.items.filter((i) => i.status === 'done');
+    const manual = (s.settings.itemOrder || []).length > 0;
     const D = (n) => addDays(today, n);
-    const overdue = open.filter((i) => i.date < today).sort(byUrgency);
+    const overdue = open.filter((i) => i.date < today).sort(byList);
     const tabs = [
-      { key: 'today', label: '今天', date: today, items: [...overdue, ...open.filter((i) => i.date === today)].sort(byUrgency), over: overdue.length },
-      { key: 'tomorrow', label: '明天', date: D(1), items: open.filter((i) => i.date === D(1)).sort(byUrgency), over: 0 },
-      { key: 'after', label: '后天', date: D(2), items: open.filter((i) => i.date === D(2)).sort(byUrgency), over: 0 },
-      { key: 'later', label: '之后', date: D(3), items: open.filter((i) => i.date > D(2)).sort(byUrgency), over: 0 },
+      { key: 'today', label: '今天', date: today, items: [...overdue, ...open.filter((i) => i.date === today)].sort(byList), over: overdue.length },
+      { key: 'tomorrow', label: '明天', date: D(1), items: open.filter((i) => i.date === D(1)).sort(byList), over: 0 },
+      { key: 'after', label: '后天', date: D(2), items: open.filter((i) => i.date === D(2)).sort(byList), over: 0 },
+      { key: 'later', label: '之后', date: D(3), items: open.filter((i) => i.date > D(2)).sort(byList), over: 0 },
     ];
     const cur = tabs.find((t) => t.key === sel) || tabs[0];
     const doneCount = doneAll.filter((i) => i.date === cur.date).length;
@@ -810,7 +828,7 @@
       if (overdue.length) {
         body += `<div class="dp-sec"><span class="dp-sec-t over">逾期 ${overdue.length}</span><span class="dp-sec-line"></span></div>${cards(overdue)}`;
       }
-      const todays = open.filter((i) => i.date === today).sort(byUrgency);
+      const todays = open.filter((i) => i.date === today).sort(byList);
       body += `<div class="dp-sec"><span class="dp-sec-t">今天 · ${md(today)} ${weekday(today)}</span><span class="dp-sec-line"></span></div>${todays.length ? cards(todays) : '<div class="dp-empty">今日暂无其他安排。</div>'}`;
     } else if (cur.key === 'later') {
       const groups = [];
@@ -831,8 +849,8 @@
 
     return `<div class="view-inner daily-page">
       <div class="page-head">
-        <div><h1 class="page-title">安排</h1><p class="page-sub">按日程时间 · 紧迫度排序</p></div>
-        <div class="page-actions"><button class="btn primary" data-act="add" data-date="${cur.date}">${icon('plus')} 添加</button></div>
+        <div><h1 class="page-title">安排</h1><p class="page-sub">${manual ? '手动排序 · 拖动卡片调整' : '按日程时间 · 紧迫度排序'}</p></div>
+        <div class="page-actions">${manual ? `<button class="chip" data-act="sort-reset" title="恢复按时间紧迫度排序">${icon('today')} 按时间</button>` : ''}<button class="btn primary" data-act="add" data-date="${cur.date}">${icon('plus')} 添加</button></div>
       </div>
 
       <div class="daily-tabs">${tabsHtml}</div>

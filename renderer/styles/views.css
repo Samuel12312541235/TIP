@@ -1618,3 +1618,12 @@ html.compact .course-row { grid-template-columns: 10px 120px minmax(0, 1fr) 50px
 
 .drag-ghost.course-row { background: #fff; padding: 11px 10px; box-shadow: 0 14px 34px -18px rgba(16, 18, 28, 0.45); }
 .drag-ghost.track-card { background: #fff; }
+
+/* 直接拖动卡片排序 */
+.item, .task-card, .track-card, .course-row { cursor: grab; }
+.item:active, .task-card:active, .track-card:active, .course-row:active { cursor: grabbing; }
+.item button, .task-card button, .track-card button, .course-row button,
+.item .check, .task-card .check { cursor: pointer; }
+.item-main, .task-main { cursor: grab; }
+.reorder-over { outline: 2px solid var(--accent); outline-offset: 3px; background: var(--accent-soft) !important; }
+.reorder-over::after { content: ""; position: absolute; left: 10px; right: 10px; top: -5px; height: 2px; border-radius: 2px; background: var(--accent); }
