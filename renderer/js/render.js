@@ -55,10 +55,13 @@
           <span class="mdot"></span><span>${esc(d.name)}</span>
           ${it.time ? `<span class="msep"></span><span class="tnum">${it.time}</span>` : ''}
           ${course ? `<span class="msep"></span><span>${esc(course.short || course.name)}</span>` : ''}
+          ${it.priority === 3 ? `<span class="key-badge">${icon('star')}重点</span>` : ''}
         </div>
       </div>
       <div class="item-right"><span class="due ${overdue ? '' : it.date === today ? 'hot' : ''}">${esc(dueLabel(it, today))}</span>
         <div class="quick-acts">
+          <button class="qa key ${it.priority === 3 ? 'on' : ''}" data-act="key" data-id="${it.id}" title="${it.priority === 3 ? '取消重点' : '标为重点'}">${icon('star')}</button>
+          <button class="qa drag" data-act="drag" data-drag-handle data-id="${it.id}" title="拖动改期">${icon('grip')}</button>
           <button class="qa" data-act="quick-edit" data-id="${it.id}" title="修改">${icon('edit')}</button>
           <button class="qa danger" data-act="quick-delete" data-id="${it.id}" title="删除">${icon('trash')}</button>
         </div>
@@ -84,7 +87,7 @@
           <span class="task-sep"></span>
           <span class="task-time">${it.time || '全天'}</span>
           ${kindLabel ? `<span class="task-kind">${kindLabel}</span>` : ''}
-          ${it.priority === 3 ? '<span class="task-flag">重要</span>' : ''}
+          ${it.priority === 3 ? `<button class="task-flag" data-act="key" data-id="${it.id}" title="取消重点">${icon('star')}重点</button>` : ''}
         </div>
         <div class="task-title">${esc(it.title)}</div>
         ${meta.length ? `<div class="task-meta">${meta.map(esc).join(' · ')}</div>` : ''}
@@ -93,6 +96,8 @@
         <span class="task-due ${overdue ? 'overdue' : ''}">${overdue ? `逾期 ${-diffDays(it.date, today)} 天` : '今天'}</span>
         <button class="task-done" data-act="toggle" data-id="${it.id}">完成</button>
         <div class="quick-acts">
+          <button class="qa key ${it.priority === 3 ? 'on' : ''}" data-act="key" data-id="${it.id}" title="${it.priority === 3 ? '取消重点' : '标为重点'}">${icon('star')}</button>
+          <button class="qa drag" data-act="drag" data-drag-handle data-id="${it.id}" title="拖动改期">${icon('grip')}</button>
           <button class="qa" data-act="quick-edit" data-id="${it.id}" title="修改">${icon('edit')}</button>
           <button class="qa danger" data-act="quick-delete" data-id="${it.id}" title="删除">${icon('trash')}</button>
         </div>
@@ -585,9 +590,9 @@
         const date = addDays(wStart, d);
         const dayItems = all.filter((i) => i.date === date || (i.endDate && i.date <= date && i.endDate >= date)).sort(byUrgency);
         const visible = dayItems.slice(0, 2);
-        rows += `<div class="pday ${date === today ? 'today' : ''}" data-act="day" data-date="${date}">
+        rows += `<div class="pday ${date === today ? 'today' : ''}" data-act="day" data-date="${date}" data-drop-date="${date}">
           <div class="pd-num"><b>${Number(date.slice(8))}</b>${dayItems.length ? `<span>${dayItems.length}</span>` : ''}</div>
-          ${visible.map((i) => `<div class="pchip ${i.status === 'done' ? 'done' : ''}" style="${cv(domOf(ctx, i.domain))}">${i.time ? i.time + ' ' : ''}${esc(i.title)}</div>`).join('')}
+          ${visible.map((i) => `<div class="pchip drag-mini ${i.status === 'done' ? 'done' : ''}" data-drag-id="${i.id}" style="${cv(domOf(ctx, i.domain))}">${i.time ? i.time + ' ' : ''}${esc(i.title)}</div>`).join('')}
           ${dayItems.length > 2 ? `<div class="pmore">+${dayItems.length - 2}</div>` : ''}
         </div>`;
       }
@@ -630,9 +635,9 @@
         .filter((x) => (x.date === date || (x.endDate && x.date <= date && x.endDate >= date)) && (filter === 'all' || x.domain === filter))
         .sort(byUrgency);
       const out = date.slice(0, 7) !== cursor;
-      cells += `<div class="cal-cell ${out ? 'out' : ''} ${date === today ? 'today' : ''} ${date === sel ? 'sel' : ''}" data-act="sel" data-date="${date}">
+      cells += `<div class="cal-cell ${out ? 'out' : ''} ${date === today ? 'today' : ''} ${date === sel ? 'sel' : ''}" data-act="sel" data-date="${date}" data-drop-date="${date}">
         <div class="cc-num"><span>${Number(date.slice(8))}</span>${date === today ? '<span class="cc-dot"></span>' : ''}</div>
-        ${items.slice(0, 2).map((x) => `<div class="cal-ev" style="${cv(domOf(ctx, x.domain))}">${esc(x.title)}</div>`).join('')}
+        ${items.slice(0, 2).map((x) => `<div class="cal-ev drag-mini" data-drag-id="${x.id}" style="${cv(domOf(ctx, x.domain))}">${esc(x.title)}</div>`).join('')}
         ${items.length > 2 ? `<div class="cal-more">+${items.length - 2}</div>` : ''}
       </div>`;
     }
@@ -763,7 +768,7 @@
 
     const tabsHtml = tabs
       .map((t) => {
-        return `<button class="day-card ${t.key === cur.key ? 'is-on' : ''} ${t.items.length ? '' : 'is-empty'}" data-act="daily-day" data-day="${t.key}">
+        return `<button class="day-card ${t.key === cur.key ? 'is-on' : ''} ${t.items.length ? '' : 'is-empty'}" data-act="daily-day" data-day="${t.key}" data-drop-date="${t.date}">
           <span class="dc-head"><b>${t.label}</b><em>${t.key === 'later' ? md(t.date) + ' 起' : md(t.date)}</em></span>
           <span class="dc-count"><b>${t.items.length}</b><span>项</span>${t.over ? `<em class="dc-over">${t.over} 逾期</em>` : ''}</span>
         </button>`;
@@ -1044,8 +1049,9 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <label class="mini-field">类型<select class="select" data-field="kind">${[['task', '任务'], ['deadline', '截止'], ['event', '日程'], ['quiz', '测验']].map(([v, l]) => `<option value="${v}" ${(draft.kind || 'task') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-          <label class="mini-field">优先级<select class="select" data-field="priority">${[[3, '重要'], [2, '普通'], [1, '轻']].map(([v, l]) => `<option value="${v}" ${(draft.priority ?? 2) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <label class="mini-field">优先级<select class="select" data-field="priority">${[[3, '重点'], [2, '普通'], [1, '轻']].map(([v, l]) => `<option value="${v}" ${(draft.priority ?? 2) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
+        <button type="button" class="key-toggle ${draft.priority === 3 ? 'on' : ''}" data-act="key-toggle" data-key-toggle>${icon('star')}<span>标为重点</span><i class="kt-dot"></i></button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <label class="mini-field">课程<select class="select" data-field="course"><option value="">无</option>${(s.courses || []).map((c) => `<option value="${c.id}" ${draft.course === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
           <label class="mini-field">主线<select class="select" data-field="trackId"><option value="">无</option>${(s.tracks || []).map((t) => `<option value="${t.id}" ${draft.trackId === t.id ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</select></label>

@@ -603,3 +603,6 @@ html.quality-lite .set-card {
 html.quality-lite .app::before,
 html.quality-lite .app::after { display: none !important; }
 html.quality-lite .view-stack { transition: none; }
+
+/* Toast 内的撤销按钮需要可点击（容器本身保持穿透） */
+.toast { pointer-events: auto; }

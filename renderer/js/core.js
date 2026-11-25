@@ -9,6 +9,8 @@
     calendar: '<rect x="3.2" y="4.8" width="17.6" height="15.6" rx="3"/><path d="M3.2 9.6h17.6M8 2.9v3.4M16 2.9v3.4"/><circle cx="8.4" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.6" cy="14" r="1.1" fill="currentColor" stroke="none"/>',
     target: '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
     spark: '<path d="M12 3.2l1.8 4.9 4.9 1.8-4.9 1.8L12 16.6l-1.8-4.9-4.9-1.8 4.9-1.8L12 3.2Z"/><path d="M18.4 15.4l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3Z"/>',
+    star: '<path d="M12 3.4l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.9L12 3.4Z"/>',
+    grip: '<circle cx="9" cy="6.4" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="6.4" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="17.6" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="17.6" r="1.3" fill="currentColor" stroke="none"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/>',
     overview: '<rect x="3.4" y="3.4" width="7.3" height="7.3" rx="2"/><rect x="13.3" y="3.4" width="7.3" height="7.3" rx="2"/><rect x="3.4" y="13.3" width="7.3" height="7.3" rx="2"/><rect x="13.3" y="13.3" width="7.3" height="7.3" rx="2"/>',
     gantt: '<rect x="3.4" y="5" width="10.6" height="3.2" rx="1.6"/><rect x="8.4" y="10.4" width="10.6" height="3.2" rx="1.6"/><rect x="5.4" y="15.8" width="12.6" height="3.2" rx="1.6"/>',

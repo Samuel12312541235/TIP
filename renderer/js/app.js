@@ -706,6 +706,13 @@
     wrap.hidden = false;
     if (App.draft) {
       wrap.innerHTML = `<div class="drawer-backdrop" data-act="drawer-close"></div>${R.itemDrawer(ctx(), App.draft)}`;
+      const psel = qs('[data-field="priority"]');
+      if (psel) {
+        psel.addEventListener('change', () => {
+          const keyEl = qs('[data-key-toggle]');
+          if (keyEl) keyEl.classList.toggle('on', Number(psel.value) === 3);
+        });
+      }
       const title = qs('#dTitle');
       setTimeout(() => {
         title && title.focus();
@@ -735,7 +742,12 @@
     d.date = (qs('[data-field="date"]') || {}).value || d.date;
     d.time = (qs('[data-field="time"]') || {}).value || '';
     d.kind = (qs('[data-field="kind"]') || {}).value || d.kind;
-    d.priority = Number((qs('[data-field="priority"]') || {}).value || 2);
+    d.priority = (() => {
+      const keyEl = qs('[data-key-toggle]');
+      const keyOn = !!(keyEl && keyEl.classList.contains('on'));
+      const selected = Number((qs('[data-field="priority"]') || {}).value || 2);
+      return keyOn ? 3 : selected;
+    })();
     d.course = (qs('[data-field="course"]') || {}).value || '';
     d.trackId = (qs('[data-field="trackId"]') || {}).value || '';
     d.subtasks = qsa('[data-sub-field]').map((inp, i) => ({
@@ -784,6 +796,328 @@
       } catch (_) {}
     }
     await deleteItemSafe(id, false);
+  }
+
+  async function toggleKey(id, btn) {
+    const item = App.state.items.find((i) => i.id === id);
+    if (!item) return;
+    const next = item.priority === 3 ? 2 : 3;
+    const source = (btn && btn.closest('.item, .task-card')) || qs(`[data-id="${id}"]`);
+    const from = source ? source.getBoundingClientRect() : null;
+    if (btn) btn.classList.add('pop');
+    const saved = await window.dayflow.saveItem(Object.assign({}, item, { priority: next }));
+    if (!saved) {
+      if (btn) btn.classList.remove('pop');
+      toast('没有保存成功，请重试。');
+      return;
+    }
+    toast(next === 3 ? '已标为重点' : '已取消重点', { icon: 'star' });
+    setTimeout(() => {
+      if (btn) setTimeout(() => btn.classList.remove('pop'), 380);
+      const card = qs(`.item[data-id="${id}"], .task-card[data-id="${id}"]`);
+      if (!card) return;
+      if (from && !DF.reduced() && !document.documentElement.classList.contains('quality-lite')) {
+        const to = card.getBoundingClientRect();
+        if (to.width > 0) {
+          const scale = Math.max(0.86, Math.min(1.12, from.width / to.width));
+          card.animate(
+            [
+              { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${scale})`, opacity: 0.65 },
+              { transform: 'none', opacity: 1 },
+            ],
+            { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1)' }
+          );
+        }
+      }
+      card.classList.add('key-glow');
+      setTimeout(() => card.classList.remove('key-glow'), 560);
+    }, 45);
+  }
+
+  async function moveItemToDate(item, date) {
+    if (!item || !date || item.date === date) return false;
+    const prev = { date: item.date, endDate: item.endDate || '' };
+    const delta = diffDays(date, item.date);
+    const endDate = item.endDate ? addDays(item.endDate, delta) : '';
+    const saved = await window.dayflow.saveItem(Object.assign({}, item, { date, endDate }));
+    if (!saved) {
+      toast('改期没有保存成功，请重试。');
+      return false;
+    }
+    toastAction(`已改到 ${md(date)}`, '撤销', async () => {
+      await window.dayflow.saveItem(Object.assign({}, item, prev));
+      toast('已恢复原日期');
+    });
+    return true;
+  }
+
+  /* ── 卡片拖动改期 ─────────────────────────────────── */
+  let dragRail = null;
+
+  function ensureDragRail() {
+    if (dragRail && document.body.contains(dragRail)) return dragRail;
+    dragRail = el('<div class="drag-rail" id="dragRail" hidden></div>');
+    document.body.appendChild(dragRail);
+    return dragRail;
+  }
+
+  function refreshDragRail() {
+    const today = App.payload.today.today;
+    const dow = parseISO(today).getDay();
+    const nextMon = addDays(today, ((8 - dow) % 7) || 7);
+    const dates = [
+      { label: '今天', date: today },
+      { label: '明天', date: addDays(today, 1) },
+      { label: '后天', date: addDays(today, 2) },
+      { label: '下周一', date: nextMon },
+    ].filter((x, i, arr) => arr.findIndex((y) => y.date === x.date) === i);
+    const rail = ensureDragRail();
+    rail.innerHTML = `<span class="drag-hint">${icon('grip')} 拖到日期改期</span>
+      <div class="drag-slots">${dates
+        .map((d) => `<button type="button" class="drag-slot" data-drop-date="${d.date}"><b>${d.label}</b><small>${md(d.date)}</small></button>`)
+        .join('')}</div>`;
+    return rail;
+  }
+
+  function showDragRail() {
+    const rail = refreshDragRail();
+    rail.hidden = false;
+    requestAnimationFrame(() => rail.classList.add('show'));
+  }
+
+  function hideDragRail() {
+    if (!dragRail) return;
+    dragRail.classList.remove('show');
+    setTimeout(() => {
+      if (dragRail && !dragRail.classList.contains('show')) dragRail.hidden = true;
+    }, 220);
+  }
+
+  function initCardDrag() {
+    let state = null;
+
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (Date.now() < (App.ui.dragSuppressUntil || 0) && e.target instanceof Element) {
+          if (e.target.closest('[data-act], [data-drag-handle], .pchip, .cal-ev')) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      },
+      true
+    );
+
+    function clearTarget() {
+      if (!state || !state.target) return;
+      state.target.classList.remove('drop-over', 'over');
+      state.target = null;
+      state.dropDate = '';
+    }
+
+    function sourceCard(handle) {
+      return handle.closest('.item, .task-card') || handle;
+    }
+
+    function cleanup() {
+      if (!state) return;
+      if (state.raf) cancelAnimationFrame(state.raf);
+      clearTarget();
+      if (state.card) state.card.classList.remove('drag-source');
+      document.body.classList.remove('is-dragging');
+      hideDragRail();
+      window.removeEventListener('keydown', onKey, true);
+      state = null;
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape' && state && state.started) {
+        e.preventDefault();
+        finishDrag('');
+      }
+    }
+
+    function onDown(e) {
+      if (state) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      const handle = e.target.closest('[data-drag-handle], .drag-mini[data-drag-id]');
+      if (!handle || !App.state) return;
+      const card = sourceCard(handle);
+      const id = handle.dataset.dragId || card.dataset.id;
+      const item = App.state.items.find((i) => i.id === id);
+      if (!item) return;
+      const rect = card.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      state = {
+        handle,
+        card,
+        item,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        rect,
+        started: false,
+        ghost: null,
+        target: null,
+        dropDate: '',
+        raf: 0,
+        pointerId: e.pointerId,
+      };
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      if (handle.hasAttribute('data-drag-handle')) {
+        e.preventDefault();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      }
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      window.addEventListener('keydown', onKey, true);
+    }
+
+    function startGhost() {
+      if (!state || state.started) return;
+      state.started = true;
+      App.ui.dragSuppressUntil = Date.now() + 650;
+      const g = state.card.cloneNode(true);
+      g.classList.add('drag-ghost');
+      g.classList.remove('drag-source');
+      g.removeAttribute('hidden');
+      g.style.left = `${state.rect.left}px`;
+      g.style.top = `${state.rect.top}px`;
+      g.style.width = `${state.rect.width}px`;
+      g.style.height = `${state.rect.height}px`;
+      g.style.transform = 'translate3d(0,0,0) scale(1.025)';
+      g.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(g);
+      state.ghost = g;
+      state.card.classList.add('drag-source');
+      document.body.classList.add('is-dragging');
+      showDragRail();
+    }
+
+    function paintGhost() {
+      if (!state || !state.ghost) return;
+      const dx = state.lastX - state.startX;
+      const dy = state.lastY - state.startY;
+      const reduced = DF.reduced() || document.documentElement.classList.contains('quality-lite');
+      const tilt = reduced ? 0 : Math.max(-3.5, Math.min(3.5, dx / 24));
+      state.ghost.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.025) rotate(${tilt}deg)`;
+      const under = document.elementFromPoint(state.lastX, state.lastY);
+      const target = under && under.closest('[data-drop-date]');
+      if (target !== state.target) {
+        clearTarget();
+        state.target = target;
+        if (target) {
+          state.dropDate = target.dataset.dropDate || '';
+          target.classList.add(target.classList.contains('drag-slot') ? 'over' : 'drop-over');
+        }
+      }
+    }
+
+    function onMove(e) {
+      if (!state) return;
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
+      if (!state.started) {
+        if (Math.hypot(e.clientX - state.startX, e.clientY - state.startY) < 6) return;
+        startGhost();
+      }
+      e.preventDefault();
+      if (!state.raf) {
+        state.raf = requestAnimationFrame(() => {
+          if (!state) return;
+          state.raf = 0;
+          paintGhost();
+        });
+      }
+    }
+
+    function finishDrag(dropDate) {
+      if (!state) return;
+      const s = state;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('keydown', onKey, true);
+      if (s.raf) cancelAnimationFrame(s.raf);
+      const target = s.target;
+      const targetRect = target ? target.getBoundingClientRect() : null;
+      const ghost = s.ghost;
+      const moved = dropDate && dropDate !== s.item.date;
+      clearTarget();
+      hideDragRail();
+      document.body.classList.remove('is-dragging');
+      App.ui.dragSuppressUntil = Date.now() + 450;
+      if (ghost) {
+        if (moved && targetRect) {
+          const sr = s.rect;
+          const tx = targetRect.left + targetRect.width / 2 - (sr.left + sr.width / 2);
+          const ty = targetRect.top + targetRect.height / 2 - (sr.top + sr.height / 2);
+          const anim = ghost.animate(
+            [
+              { transform: ghost.style.transform, opacity: 0.98 },
+              { transform: `translate3d(${tx}px, ${ty}px, 0) scale(.58) rotate(0deg)`, opacity: 0 },
+            ],
+            { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+          );
+          anim.onfinish = () => ghost.remove();
+        } else {
+          const anim = ghost.animate(
+            [
+              { transform: ghost.style.transform, opacity: 0.98 },
+              { transform: 'translate3d(0,0,0) scale(1) rotate(0deg)', opacity: 1 },
+            ],
+            { duration: 280, easing: 'cubic-bezier(.2,.9,.25,1.18)', fill: 'forwards' }
+          );
+          anim.onfinish = () => ghost.remove();
+        }
+      }
+      if (s.card) s.card.classList.remove('drag-source');
+      state = null;
+      if (moved) {
+        moveItemToDate(s.item, dropDate);
+      }
+    }
+
+    function onUp(e) {
+      if (!state) return;
+      const s = state;
+      if (!s.started) {
+        // 没有达到拖动阈值，保留普通点击
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey, true);
+        try {
+          s.handle.releasePointerCapture(s.pointerId);
+        } catch (_) {}
+        state = null;
+        return;
+      }
+      e.preventDefault();
+      try {
+        s.handle.releasePointerCapture(s.pointerId);
+      } catch (_) {}
+      finishDrag(s.dropDate);
+    }
+
+    function onCancel() {
+      if (!state) return;
+      if (state.started) finishDrag('');
+      else {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey, true);
+        state = null;
+      }
+    }
+
+    document.addEventListener('pointerdown', onDown, true);
   }
 
   function toastAction(message, label, fn) {
@@ -1488,6 +1822,24 @@
       case 'toggle':
         await toggleItem(node.dataset.id);
         break;
+      case 'key':
+        e && e.stopPropagation();
+        await toggleKey(node.dataset.id, node);
+        break;
+      case 'drag':
+        e && e.preventDefault();
+        break;
+      case 'key-toggle': {
+        e && e.preventDefault();
+        e && e.stopPropagation();
+        node.classList.toggle('on');
+        const psel = qs('[data-field="priority"]');
+        if (psel) {
+          if (node.classList.contains('on')) psel.value = '3';
+          else if (psel.value === '3') psel.value = '2';
+        }
+        break;
+      }
       case 'quick-edit':
         e && e.stopPropagation();
         openItemDrawer(App.state.items.find((i) => i.id === node.dataset.id));
@@ -1980,6 +2332,7 @@
     startPerf();
     bindGlobal();
     bindGanttDrag();
+    initCardDrag();
     window.dayflow.onHealth((data) => toast((data && data.tip) || '请起身活动一下。', { icon: 'spark' }));
 
     window.dayflow.onState((payload) => {
