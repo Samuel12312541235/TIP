@@ -16,6 +16,7 @@
     ui: {
       view: 'today',
       filter: 'all',
+      agendaTab: 'key',
       showDone: false,
       plannerWeeks: 4,
       plannerOffset: 0,
@@ -846,11 +847,15 @@
     const item = App.state.items.find((i) => i.id === id);
     if (!item) return;
     const next = item.priority === 3 ? 2 : 3;
+    const prevTab = App.ui.agendaTab;
+    const switchTab = App.ui.view === 'today';
+    if (switchTab) App.ui.agendaTab = next === 3 ? 'key' : 'other';
     const source = (btn && btn.closest('.item, .task-card')) || qs(`[data-id="${id}"]`);
     const from = source ? source.getBoundingClientRect() : null;
     if (btn) btn.classList.add('pop');
     const saved = await saveItemSafe(Object.assign({}, item, { priority: next }));
     if (!saved) {
+      if (switchTab) App.ui.agendaTab = prevTab;
       if (btn) btn.classList.remove('pop');
       toast('没有保存成功，请重试。');
       return;
@@ -980,11 +985,15 @@
     if (!item) return false;
     const patch = kind === 'priority' ? { priority: Number(value) } : { domain: value };
     const prev = kind === 'priority' ? { priority: item.priority } : { domain: item.domain };
+    const prevTab = App.ui.agendaTab;
+    const switchTab = App.ui.view === 'today' && kind === 'priority';
+    if (switchTab) App.ui.agendaTab = Number(value) === 3 ? 'key' : 'other';
     let saved = null;
     try {
       saved = await window.dayflow.saveItem(Object.assign({}, item, patch));
     } catch (_) {}
     if (!saved) {
+      if (switchTab) App.ui.agendaTab = prevTab;
       toast('归类没有保存成功，请重试。');
       return false;
     }
@@ -2156,6 +2165,17 @@
       case 'filter':
         setFilter(node.dataset.domain);
         break;
+      case 'agenda-tab': {
+        const tab = node.dataset.tab === 'other' ? 'other' : 'key';
+        if (App.ui.agendaTab === tab) break;
+        App.ui.agendaTab = tab;
+        paint({ animate: false });
+        requestAnimationFrame(() => {
+          const cards = qsa('#view .agenda .task-card, #view .agenda .items .item');
+          if (cards.length) dealCards(cards, { y: 10, rot: 0.5, stagger: 22, duration: 300, limit: 40 });
+        });
+        break;
+      }
       case 'sort-reset':
         await saveSettings({ itemOrder: [] });
         toast('已恢复按时间排序');
