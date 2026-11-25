@@ -51,6 +51,14 @@
     return run;
   }
 
+  async function saveItemSafe(payload) {
+    try {
+      return await window.dayflow.saveItem(payload);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /* ── 数据 ─────────────────────────────────────────────── */
   function setPayload(p) {
     App.payload = p;
@@ -797,10 +805,14 @@
       qs('#dTitle') && qs('#dTitle').focus();
       return;
     }
-    const saved = await window.dayflow.saveItem(d);
+    const saved = await saveItemSafe(d);
+    if (!saved) {
+      toast('这次没有保存成功，内容还在，再试一次就好。');
+      return;
+    }
     closeDrawer();
-    toast(d.id ? '已保存修改' : `已登记日程 · ${d.date.slice(5)}`, { icon: 'check' });
-    if (saved && saved.id) App.ui.calSel = saved.date || App.ui.calSel;
+    toast(d.id ? '已保存，安排更新了 ✨' : '记下了，已经放进日程里 ✨', { icon: 'check' });
+    if (saved.id) App.ui.calSel = saved.date || App.ui.calSel;
   }
 
   async function deleteItemSafe(id, fromDrawer) {
@@ -837,7 +849,7 @@
     const source = (btn && btn.closest('.item, .task-card')) || qs(`[data-id="${id}"]`);
     const from = source ? source.getBoundingClientRect() : null;
     if (btn) btn.classList.add('pop');
-    const saved = await window.dayflow.saveItem(Object.assign({}, item, { priority: next }));
+    const saved = await saveItemSafe(Object.assign({}, item, { priority: next }));
     if (!saved) {
       if (btn) btn.classList.remove('pop');
       toast('没有保存成功，请重试。');
@@ -871,7 +883,7 @@
     const prev = { date: item.date, endDate: item.endDate || '' };
     const delta = diffDays(date, item.date);
     const endDate = item.endDate ? addDays(item.endDate, delta) : '';
-    const saved = await window.dayflow.saveItem(Object.assign({}, item, { date, endDate }));
+    const saved = await saveItemSafe(Object.assign({}, item, { date, endDate }));
     if (!saved) {
       toast('改期没有保存成功，请重试。');
       return false;
@@ -1022,7 +1034,7 @@
           toast('已恢复排序');
         });
       })
-      .catch(() => toast('排序保存失败，请重试。'));
+      .catch(() => { toast('排序保存失败，请重试。'); paint({ animate: false }); });
     return true;
   }
 
@@ -1442,7 +1454,7 @@
       });
       const ids = [...s.container.querySelectorAll(cardSelector(s.kind))].map((el) => el.dataset.id);
       const patch = s.kind === 'track' ? { trackOrder: ids } : { courseOrder: ids };
-      saveSettings(patch).then(() => toast('排序已更新')).catch(() => toast('排序保存失败，请重试。'));
+      saveSettings(patch).then(() => toast('排序已更新')).catch(() => { toast('排序保存失败，请重试。'); paint({ animate: false }); });
     }
 
     function onUp(e) {
@@ -2496,9 +2508,14 @@
     const tr = App.trackDraft;
     if (!tr) return;
     if (!window.confirm(`删除主线「${tr.title}」？关联日程会保留，但会解除与这条主线的关联。`)) return;
-    await window.dayflow.deleteTrack(tr.id);
+    try {
+      await window.dayflow.deleteTrack(tr.id);
+    } catch (_) {
+      toast('删除没有成功，请重试。');
+      return;
+    }
     closeDrawer();
-    toast('已删除主线');
+    toast('已删除主线，关联日程已经保留');
   }
 
   async function saveCourse() {
@@ -2516,18 +2533,28 @@
       color: (qs('[data-course-field="color"]') || {}).value || c.color,
       note: (qs('[data-course-field="note"]') || {}).value || '',
     };
-    await window.dayflow.updateCourse(patch);
+    try {
+      await window.dayflow.updateCourse(patch);
+    } catch (_) {
+      toast('课程没有保存成功，请重试。');
+      return;
+    }
     closeDrawer();
-    toast('课程已更新');
+    toast('课程已更新，安排也同步了 ✨');
   }
 
   async function deleteCourseSafe() {
     const c = App.courseDraft;
     if (!c) return;
     if (!window.confirm(`删除课程「${c.name}」？关联日程会保留，但会解除课程关联。`)) return;
-    await window.dayflow.deleteCourse(c.id);
+    try {
+      await window.dayflow.deleteCourse(c.id);
+    } catch (_) {
+      toast('删除没有成功，请重试。');
+      return;
+    }
     closeDrawer();
-    toast('已删除课程');
+    toast('已删除课程，关联日程已经保留');
   }
 
   /* ── 抽屉里的自定义交互 ───────────────────────────────── */
