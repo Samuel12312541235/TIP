@@ -17,6 +17,7 @@
 - 下载 [Dayflow-1.0.0-Setup.exe](https://github.com/Samuel12312541235/TIP/releases/latest/download/Dayflow-1.0.0-Setup.exe)
 - 双击安装包，按提示完成安装，无需管理员权限
 - 安装到当前用户目录，自动创建桌面和开始菜单快捷方式，安装完可直接启动
+- 也可以下载 [安装包 + 使用说明压缩包](https://github.com/Samuel12312541235/TIP/releases/latest/download/Dayflow-1.0.0-Setup-Release.zip)
 - 首次启动会在 `%APPDATA%\Dayflow` 创建数据目录
 - 卸载：Windows 设置 → 应用 → 日序 Dayflow，或开始菜单里的卸载快捷方式
 - 卸载不会删除日程数据；想彻底清空再删除 `%APPDATA%\Dayflow`
