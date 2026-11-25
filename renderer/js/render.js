@@ -7,6 +7,17 @@
 
   /* ── 常用 ─────────────────────────────────────────────── */
   const byDate = (a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99'));
+  // 紧迫度：逾期最早 → 今天 → 之后；同一天按时间；同一时间再按优先级。
+  const byUrgency = (a, b) => {
+    const ad = a.status === 'done' || a.status === 'dropped';
+    const bd = b.status === 'done' || b.status === 'dropped';
+    if (ad !== bd) return ad ? 1 : -1;
+    const dateCmp = (a.date || '').localeCompare(b.date || '');
+    if (dateCmp) return dateCmp;
+    const timeCmp = (a.time || '24:00').localeCompare(b.time || '24:00');
+    if (timeCmp) return timeCmp;
+    return (b.priority || 0) - (a.priority || 0);
+  };
   const isOpen = (i) => i.status !== 'done' && i.status !== 'dropped';
   const domOf = (ctx, id) => ctx.domainMap[id] || ctx.state.domains[0];
   const cv = (d) => `--c:${d.color};--c-soft:${d.soft}`;
@@ -114,10 +125,10 @@
     const pool = [...overdue, ...todayOpen].filter(inFilter);
     const focus = pool
       .filter((i) => i.priority === 3 || i.kind === 'deadline' || i.kind === 'quiz')
-      .sort((a, b) => (b.priority - a.priority) || byDate(a, b))
+      .sort(byUrgency)
       .slice(0, 3);
     const focused = new Set(focus.map((i) => i.id));
-    const restAll = pool.filter((i) => !focused.has(i.id)).sort(byDate);
+    const restAll = pool.filter((i) => !focused.has(i.id)).sort(byUrgency);
     const rest = restAll.slice(0, 4);
     const restMore = restAll.length - rest.length;
     const doneList = doneToday.filter(inFilter);
@@ -132,7 +143,7 @@
 
     const deadlines = open
       .filter((i) => i.date >= today && i.date <= addDays(today, 32) && (i.kind === 'deadline' || i.kind === 'quiz' || i.kind === 'event' || i.priority === 3))
-      .sort(byDate)
+      .sort(byUrgency)
       .slice(0, 5);
 
     const routines = s.settings.routines || [];
@@ -462,7 +473,7 @@
     const groups = s.domains
       .map((d) => ({
         d,
-        items: items.filter((i) => i.domain === d.id).sort((a, b) => (b.priority === 3 ? 1 : 0) - (a.priority === 3 ? 1 : 0) || byDate(a, b)),
+        items: items.filter((i) => i.domain === d.id).sort(byUrgency),
       }))
       .filter((g) => g.items.length);
 
@@ -572,7 +583,7 @@
       rows += `<div class="pweek-label ${isNow ? 'now' : ''}"><b>W${wNo}</b><span>${md(wStart)}</span></div>`;
       for (let d = 0; d < 7; d++) {
         const date = addDays(wStart, d);
-        const dayItems = all.filter((i) => i.date === date || (i.endDate && i.date <= date && i.endDate >= date)).sort(byDate);
+        const dayItems = all.filter((i) => i.date === date || (i.endDate && i.date <= date && i.endDate >= date)).sort(byUrgency);
         const visible = dayItems.slice(0, 2);
         rows += `<div class="pday ${date === today ? 'today' : ''}" data-act="day" data-date="${date}">
           <div class="pd-num"><b>${Number(date.slice(8))}</b>${dayItems.length ? `<span>${dayItems.length}</span>` : ''}</div>
@@ -617,7 +628,7 @@
       const date = addDays(gridStart, i);
       const items = all
         .filter((x) => (x.date === date || (x.endDate && x.date <= date && x.endDate >= date)) && (filter === 'all' || x.domain === filter))
-        .sort(byDate);
+        .sort(byUrgency);
       const out = date.slice(0, 7) !== cursor;
       cells += `<div class="cal-cell ${out ? 'out' : ''} ${date === today ? 'today' : ''} ${date === sel ? 'sel' : ''}" data-act="sel" data-date="${date}">
         <div class="cc-num"><span>${Number(date.slice(8))}</span>${date === today ? '<span class="cc-dot"></span>' : ''}</div>
@@ -626,7 +637,7 @@
       </div>`;
     }
 
-    const selItems = all.filter((x) => x.date === sel || (x.endDate && x.date <= sel && x.endDate >= sel)).sort(byDate);
+    const selItems = all.filter((x) => x.date === sel || (x.endDate && x.date <= sel && x.endDate >= sel)).sort(byUrgency);
     const monthItems = all.filter((x) => x.date.slice(0, 7) === cursor);
     const monthDone = monthItems.filter((x) => x.status === 'done').length;
 
@@ -718,7 +729,7 @@
           <div class="course-list">
             ${courses
               .map((c) => {
-                const next = open.filter((i) => i.course === c.id).sort(byDate)[0];
+                const next = open.filter((i) => i.course === c.id).sort(byUrgency)[0];
                 return `<div class="course-row" style="--c:${c.color}" data-act="course" data-id="${c.id}">
                   <span class="cr-dot"></span><span class="cr-name">${esc(c.name)}</span>
                   <span class="cr-next">${next ? esc(next.title) : '暂无待办'}</span>
@@ -739,14 +750,13 @@
     const sel = ctx.ui.dailyDay || 'today';
     const open = s.items.filter(isOpen);
     const doneAll = s.items.filter((i) => i.status === 'done');
-    const keyFirst = (a, b) => (b.priority === 3 ? 1 : 0) - (a.priority === 3 ? 1 : 0) || byDate(a, b);
     const D = (n) => addDays(today, n);
-    const overdue = open.filter((i) => i.date < today).sort(keyFirst);
+    const overdue = open.filter((i) => i.date < today).sort(byUrgency);
     const tabs = [
-      { key: 'today', label: '今天', date: today, items: [...overdue, ...open.filter((i) => i.date === today)].sort(keyFirst), over: overdue.length },
-      { key: 'tomorrow', label: '明天', date: D(1), items: open.filter((i) => i.date === D(1)).sort(keyFirst), over: 0 },
-      { key: 'after', label: '后天', date: D(2), items: open.filter((i) => i.date === D(2)).sort(keyFirst), over: 0 },
-      { key: 'later', label: '之后', date: D(3), items: open.filter((i) => i.date > D(2)).sort(byDate), over: 0 },
+      { key: 'today', label: '今天', date: today, items: [...overdue, ...open.filter((i) => i.date === today)].sort(byUrgency), over: overdue.length },
+      { key: 'tomorrow', label: '明天', date: D(1), items: open.filter((i) => i.date === D(1)).sort(byUrgency), over: 0 },
+      { key: 'after', label: '后天', date: D(2), items: open.filter((i) => i.date === D(2)).sort(byUrgency), over: 0 },
+      { key: 'later', label: '之后', date: D(3), items: open.filter((i) => i.date > D(2)).sort(byUrgency), over: 0 },
     ];
     const cur = tabs.find((t) => t.key === sel) || tabs[0];
     const doneCount = doneAll.filter((i) => i.date === cur.date).length;
@@ -767,7 +777,7 @@
       if (overdue.length) {
         body += `<div class="dp-sec"><span class="dp-sec-t over">逾期 ${overdue.length}</span><span class="dp-sec-line"></span></div>${cards(overdue)}`;
       }
-      const todays = open.filter((i) => i.date === today).sort(keyFirst);
+      const todays = open.filter((i) => i.date === today).sort(byUrgency);
       body += `<div class="dp-sec"><span class="dp-sec-t">今天 · ${md(today)} ${weekday(today)}</span><span class="dp-sec-line"></span></div>${todays.length ? cards(todays) : '<div class="dp-empty">今日暂无其他安排。</div>'}`;
     } else if (cur.key === 'later') {
       const groups = [];
@@ -788,7 +798,7 @@
 
     return `<div class="view-inner daily-page">
       <div class="page-head">
-        <div><h1 class="page-title">安排</h1><p class="page-sub">一次只看一天</p></div>
+        <div><h1 class="page-title">安排</h1><p class="page-sub">按日程时间 · 紧迫度排序</p></div>
         <div class="page-actions"><button class="btn primary" data-act="add" data-date="${cur.date}">${icon('plus')} 添加</button></div>
       </div>
 
