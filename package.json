@@ -14,7 +14,8 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win portable",
+    "installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1"
   },
   "devDependencies": {
     "electron": "^45.4.1",
@@ -57,7 +58,6 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "artifactName": "Dayflow-${version}-portable.exe",
       "signExecutable": false
     },
     "portable": {

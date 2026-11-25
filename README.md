@@ -8,15 +8,28 @@
   <img src="assets/icon.png" width="112" alt="Dayflow icon" />
 </p>
 
-## 下载与运行
+## 下载与安装
 
-- 下载 `Dayflow-1.0.0-portable.exe`
-- 双击即可打开，无需安装、无需 Node.js、无需配置环境
-- 支持 Windows 10 / 11 x64
-- 首次启动会在 `%APPDATA%\Dayflow` 创建独立数据目录；程序本身不写入安装目录
-- 想彻底卸载：退出应用后删除 `%APPDATA%\Dayflow` 即可
+支持 Windows 10 / 11 x64。
 
-> 便携版每次运行会先解包到临时目录，首次启动可能比后续启动稍慢。
+### 安装版（推荐）
+
+- 下载 [Dayflow-1.0.0-Setup.exe](https://github.com/Samuel12312541235/TIP/releases/latest/download/Dayflow-1.0.0-Setup.exe)
+- 双击安装包，按提示完成安装，无需管理员权限
+- 安装到当前用户目录，自动创建桌面和开始菜单快捷方式，安装完可直接启动
+- 首次启动会在 `%APPDATA%\Dayflow` 创建数据目录
+- 卸载：Windows 设置 → 应用 → 日序 Dayflow，或开始菜单里的卸载快捷方式
+- 卸载不会删除日程数据；想彻底清空再删除 `%APPDATA%\Dayflow`
+
+> 当前安装包未购买代码签名证书。如果 SmartScreen 提示“未知发布者”，点“更多信息”→“仍要运行”即可。
+
+### 免安装版
+
+- 下载 [Dayflow-1.0.0-win64.zip](https://github.com/Samuel12312541235/TIP/releases/latest/download/Dayflow-1.0.0-win64.zip)
+- 解压后双击 `日序 Dayflow 1.0.0\Dayflow.exe`
+- 或下载单文件 `Dayflow-1.0.0-portable.exe`
+- 便携版每次运行会先解包到临时目录，首次启动可能稍慢
+- 数据同样保存在 `%APPDATA%\Dayflow`
 
 ## 功能
 
@@ -154,14 +167,20 @@ npm install
 npm start
 ```
 
-## 打包 Windows 便携版
+## 打包 Windows 安装版 / 便携版
 
 ```bash
 npm install
-npm run dist
+npm run dist       # 便携版
+npm run installer  # Windows 安装包（NSIS）
 ```
 
-产物在 `release/Dayflow-1.0.0-portable.exe`。
+产物：
+
+- `release/Dayflow-1.0.0-portable.exe`
+- `release/Dayflow-1.0.0-Setup.exe`
+
+`npm run installer` 会自动查找本机 NSIS，或使用 electron-builder 缓存的 NSIS。也可以自行安装 NSIS 后运行 `makensis build/installer.nsi`。
 
 ## 技术栈
 
