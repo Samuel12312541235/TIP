@@ -148,7 +148,6 @@
     const focusAll = pool.filter((i) => i.priority === 3 || i.kind === 'deadline' || i.kind === 'quiz').sort(byList);
     const focused = new Set(focusAll.map((i) => i.id));
     const restAll = pool.filter((i) => !focused.has(i.id)).sort(byList);
-    const tab = ctx.ui.agendaTab === 'other' ? 'other' : 'key';
     const doneList = doneToday.filter(inFilter);
     const keyCount = pool.filter((i) => i.priority === 3).length;
 
@@ -219,11 +218,8 @@
         <section class="agenda rise" style="--i:2">
           <div class="agenda-head">
             <div class="agenda-title-wrap">
-              <div class="agenda-title">今日安排 <span>${pool.length} 项待办${pool.filter((i) => i.date < today).length ? ` · ${pool.filter((i) => i.date < today).length} 逾期` : ''}</span></div>
-              <div class="agenda-switch">
-                <button class="agenda-tab ${tab === 'key' ? 'on' : ''}" data-act="agenda-tab" data-tab="key" data-drop-priority="3">重点 <b>${focusAll.length}</b></button>
-                <button class="agenda-tab ${tab === 'other' ? 'on' : ''}" data-act="agenda-tab" data-tab="other" data-drop-priority="2">其他 <b>${restAll.length}</b></button>
-              </div>
+              <div class="agenda-title">今日重点 <span>${focusAll.length} 项重点 · ${restAll.length} 项其他</span></div>
+              <p class="agenda-hint">上下拖动卡片，可在重点与其他之间切换</p>
             </div>
             <button class="link-btn" data-act="add" data-date="${today}">${icon('plus')} 添加</button>
           </div>
@@ -232,15 +228,13 @@
               <button class="filter-chip ${filter === 'all' ? 'on' : ''}" data-act="filter" data-domain="all">全部</button>
               ${s.domains.map((d) => `<button class="filter-chip ${filter === d.id ? 'on' : ''}" data-act="filter" data-domain="${d.id}" data-drop-domain="${d.id}"><span class="cdot" style="--c:${d.color}"></span>${esc(d.name)}</button>`).join('')}
             </div>
-            ${
-              tab === 'key'
-                ? focusAll.length
-                  ? `<div class="stack">${focusAll.map((i) => focusRow(i, ctx)).join('')}</div>`
-                  : `<div class="empty">${icon('star')}<div>暂无重点任务</div><span>把卡片拖到「重点」即可</span></div>`
-                : restAll.length
-                  ? `<div class="items">${restAll.map((i) => R.itemRow(i, ctx)).join('')}</div>`
-                  : `<div class="empty">${icon('check')}<div>暂无其他任务</div><span>这一栏已经清空了</span></div>`
-            }
+            <div class="agenda-sec key-sec" data-drop-priority="3">
+              ${focusAll.length ? `<div class="stack">${focusAll.map((i) => focusRow(i, ctx)).join('')}</div>` : `<div class="empty">${icon('star')}<div>暂无重点任务</div><span>把卡片向上拖到这里，即可标为重点</span></div>`}
+            </div>
+            <div class="agenda-sec other-sec" data-drop-priority="2">
+              <div class="sub-label">其他安排 <span>${restAll.length}</span></div>
+              ${restAll.length ? `<div class="items">${restAll.map((i) => R.itemRow(i, ctx)).join('')}</div>` : `<div class="empty">${icon('check')}<div>暂无其他任务</div><span>把卡片向下拖到这里，即可回到普通节奏</span></div>`}
+            </div>
             ${doneList.length ? `<button class="done-toggle ${ctx.ui.showDone ? 'open' : ''}" data-act="show-done">${icon('chevronRight')} 已完成 ${doneList.length} 项</button><div class="items" ${ctx.ui.showDone ? '' : 'hidden'}>${doneList.map((i) => R.itemRow(i, ctx)).join('')}</div>` : ''}
           </div>
         </section>

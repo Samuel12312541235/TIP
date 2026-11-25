@@ -1677,3 +1677,17 @@ html.quality-lite .class-dock { backdrop-filter: none; background: #fff; }
 .agenda-tab.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(16, 18, 28, 0.08); }
 .agenda-tab.class-over { outline: 2px dashed var(--accent); outline-offset: 2px; background: var(--accent-soft); color: var(--accent-ink); }
 .agenda .empty span { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted-2); }
+
+/* 今日垂直分区：重点在上，其他在下 */
+.agenda-hint { margin: 1px 0 0; font-size: 11px; color: var(--muted-2); }
+.agenda-sec {
+  border-radius: 13px; padding: 5px; margin: -5px -5px 12px;
+  transition: background 0.16s, outline-color 0.16s;
+}
+.agenda-sec.other-sec { margin-bottom: 0; }
+.agenda-sec.class-over {
+  background: var(--accent-soft);
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
+}
+.agenda-sec .empty { padding: 18px 12px; }

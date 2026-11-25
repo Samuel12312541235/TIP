@@ -16,7 +16,6 @@
     ui: {
       view: 'today',
       filter: 'all',
-      agendaTab: 'key',
       showDone: false,
       plannerWeeks: 4,
       plannerOffset: 0,
@@ -632,6 +631,34 @@
     setTimeout(() => host.remove(), opts.big ? 1500 : 1000);
   }
 
+  function captureAgendaRects() {
+    const map = new Map();
+    qsa('#view .agenda .task-card, #view .agenda .items .item').forEach((el) => {
+      if (el.dataset.id) map.set(el.dataset.id, el.getBoundingClientRect());
+    });
+    return map;
+  }
+
+  function animateAgendaReflow(before, skipId) {
+    if (!before || window.DF.reduced()) return;
+    qsa('#view .agenda .task-card, #view .agenda .items .item').forEach((el) => {
+      if (!el.dataset.id || el.dataset.id === skipId) return;
+      const a = before.get(el.dataset.id);
+      if (!a) return;
+      const b = el.getBoundingClientRect();
+      const dx = a.left - b.left;
+      const dy = a.top - b.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate(
+        [
+          { transform: `translate(${dx}px, ${dy}px)`, opacity: 0.72 },
+          { transform: 'translate(0,0)', opacity: 1 },
+        ],
+        { duration: 340, easing: 'cubic-bezier(.2,.85,.25,1)' }
+      );
+    });
+  }
+
   function completionPraise({ n, key, combo, left, overdue }) {
     const pick = (arr, seed) => arr[Math.abs(seed) % arr.length];
     if (left === 0 && overdue === 0) return '最后一项完成，今天稳稳收住了 🌙 辛苦啦';
@@ -847,15 +874,12 @@
     const item = App.state.items.find((i) => i.id === id);
     if (!item) return;
     const next = item.priority === 3 ? 2 : 3;
-    const prevTab = App.ui.agendaTab;
-    const switchTab = App.ui.view === 'today';
-    if (switchTab) App.ui.agendaTab = next === 3 ? 'key' : 'other';
     const source = (btn && btn.closest('.item, .task-card')) || qs(`[data-id="${id}"]`);
     const from = source ? source.getBoundingClientRect() : null;
+    const before = captureAgendaRects();
     if (btn) btn.classList.add('pop');
     const saved = await saveItemSafe(Object.assign({}, item, { priority: next }));
     if (!saved) {
-      if (switchTab) App.ui.agendaTab = prevTab;
       if (btn) btn.classList.remove('pop');
       toast('没有保存成功，请重试。');
       return;
@@ -863,6 +887,7 @@
     toast(next === 3 ? '已标为重点，先照顾它 🌟' : '已放回普通节奏，慢慢来', { icon: 'star' });
     setTimeout(() => {
       if (btn) setTimeout(() => btn.classList.remove('pop'), 380);
+      animateAgendaReflow(before, id);
       const card = qs(`.item[data-id="${id}"], .task-card[data-id="${id}"]`);
       if (!card) return;
       if (from && !DF.reduced() && !document.documentElement.classList.contains('quality-lite')) {
@@ -985,18 +1010,16 @@
     if (!item) return false;
     const patch = kind === 'priority' ? { priority: Number(value) } : { domain: value };
     const prev = kind === 'priority' ? { priority: item.priority } : { domain: item.domain };
-    const prevTab = App.ui.agendaTab;
-    const switchTab = App.ui.view === 'today' && kind === 'priority';
-    if (switchTab) App.ui.agendaTab = Number(value) === 3 ? 'key' : 'other';
+    const before = captureAgendaRects();
     let saved = null;
     try {
       saved = await window.dayflow.saveItem(Object.assign({}, item, patch));
     } catch (_) {}
     if (!saved) {
-      if (switchTab) App.ui.agendaTab = prevTab;
       toast('归类没有保存成功，请重试。');
       return false;
     }
+    setTimeout(() => animateAgendaReflow(before), 60);
     let label = '';
     if (kind === 'priority') {
       const p = Number(value);
@@ -1006,9 +1029,11 @@
       label = `已归到「${d ? d.name : value}」分区`;
     }
     toastAction(label, '撤销', async () => {
+      const undoBefore = captureAgendaRects();
       try {
         await window.dayflow.saveItem(Object.assign({}, item, prev));
         toast('已恢复');
+        setTimeout(() => animateAgendaReflow(undoBefore), 60);
       } catch (_) {
         toast('恢复失败，请重试。');
       }
@@ -1082,6 +1107,7 @@
     function cleanup() {
       if (!state) return;
       if (state.raf) cancelAnimationFrame(state.raf);
+      if (state.scrollRaf) cancelAnimationFrame(state.scrollRaf);
       clearTarget();
       if (state.card) state.card.classList.remove('drag-source');
       document.body.classList.remove('is-dragging');
@@ -1138,6 +1164,7 @@
         classValue: '',
         dropDate: '',
         raf: 0,
+        scrollRaf: 0,
         pointerId: e.pointerId,
       };
       try {
@@ -1172,6 +1199,7 @@
       state.card.classList.add('drag-source');
       document.body.classList.add('is-dragging');
       if (state.card.matches('.item, .task-card, .pchip, .cal-ev')) showClassDock();
+      state.scrollRaf = requestAnimationFrame(autoScroll);
     }
 
     function paintGhost() {
@@ -1193,19 +1221,19 @@
       const classEl = under && under.closest('[data-drop-priority], [data-drop-domain]');
       const canClass = !!(classEl && state.card.matches('.item, .task-card, .pchip, .cal-ev'));
       const dateTarget = under && under.closest('[data-drop-date]');
-      const target = canClass ? classEl : canReorder ? cardUnder : dateTarget;
+      const target = canReorder ? cardUnder : canClass ? classEl : dateTarget;
       if (target !== state.target) {
         clearTarget();
         state.target = target;
-        state.reorderTarget = canReorder && !canClass ? cardUnder : null;
+        state.reorderTarget = canReorder ? cardUnder : null;
         if (target) {
-          if (canClass) {
+          if (canReorder) {
+            target.classList.add('reorder-over');
+          } else if (canClass) {
             state.classTarget = classEl;
             state.classKind = classEl.hasAttribute('data-drop-priority') ? 'priority' : 'domain';
             state.classValue = classEl.getAttribute(state.classKind === 'priority' ? 'data-drop-priority' : 'data-drop-domain') || '';
             target.classList.add('class-over');
-          } else if (canReorder) {
-            target.classList.add('reorder-over');
           } else {
             state.dropDate = target.dataset.dropDate || '';
             target.classList.add(target.classList.contains('drag-slot') ? 'over' : 'drop-over');
@@ -1232,6 +1260,24 @@
       }
     }
 
+    function autoScroll() {
+      if (!state || !state.started) return;
+      const view = qs('#view');
+      const edge = 92;
+      let delta = 0;
+      if (state.lastY < edge) delta = -Math.min(18, 4 + (edge - state.lastY) / 5);
+      else if (state.lastY > window.innerHeight - edge) delta = Math.min(18, 4 + (state.lastY - (window.innerHeight - edge)) / 5);
+      if (view && delta) {
+        const under = document.elementFromPoint(state.lastX, state.lastY);
+        if (!(under && under.closest('#classDock'))) {
+          const prev = view.scrollTop;
+          view.scrollTop += delta;
+          if (view.scrollTop !== prev) paintGhost();
+        }
+      }
+      state.scrollRaf = requestAnimationFrame(autoScroll);
+    }
+
     function finishDrag(dropDate) {
       if (!state) return;
       const s = state;
@@ -1240,6 +1286,7 @@
       window.removeEventListener('pointercancel', onCancel);
       window.removeEventListener('keydown', onKey, true);
       if (s.raf) cancelAnimationFrame(s.raf);
+      if (s.scrollRaf) cancelAnimationFrame(s.scrollRaf);
       const reorderTarget = s.reorderTarget;
       const classTarget = s.classTarget;
       const classKind = s.classKind;
@@ -2165,17 +2212,6 @@
       case 'filter':
         setFilter(node.dataset.domain);
         break;
-      case 'agenda-tab': {
-        const tab = node.dataset.tab === 'other' ? 'other' : 'key';
-        if (App.ui.agendaTab === tab) break;
-        App.ui.agendaTab = tab;
-        paint({ animate: false });
-        requestAnimationFrame(() => {
-          const cards = qsa('#view .agenda .task-card, #view .agenda .items .item');
-          if (cards.length) dealCards(cards, { y: 10, rot: 0.5, stagger: 22, duration: 300, limit: 40 });
-        });
-        break;
-      }
       case 'sort-reset':
         await saveSettings({ itemOrder: [] });
         toast('已恢复按时间排序');
